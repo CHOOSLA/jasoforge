@@ -65,12 +65,34 @@ def verify_quotes(quotes, full_text):
         results.append({"quote": q, "valid": is_valid})
     return results
 
+TYPE_ALIASES = {
+    "Type_A": "Type_A",
+    "Type_B": "Type_B",
+    "Type_C": "Type_C",
+    "Type_D": "Type_D",
+    "Type_E": "Type_E",
+    "Complexity_And_Resource_Optimization": "Type_D",
+    "Infrastructure_And_Data_Pipeline": "Type_E",
+    "Decision_Making_And_Tradeoffs": "Type_A",
+    "Deep_Debugging_And_Underlying_Root_Cause": "Type_B",
+    "Full_Stack_System_Perspective": "Type_C"
+}
+
+TYPE_D_PATTERN = re.compile(r'(O\([^)]+\)|\d+(?:\.\d+)?\s*(?:ms|s|초|%|MB|GB|배|fps|qps))', re.IGNORECASE)
+TYPE_E_PATTERN = re.compile(r'(\d+(?:\.\d+)?\s*(?:qps|tps|ms|초|건/초|mbps|gbps|req/s)|TPS|QPS|SLA|파이프라인)', re.IGNORECASE)
+AXIS_C_PROD_PEER_PATTERN = re.compile(
+    r'(운영|장애|트래픽|SLA|유료|마감|배포|프로덕션|상용|고객사|서비스|'
+    r'PR|머지|merge|등재|논문|학회|SOTA|벤치마크|스타\s*\d+|오픈소스|업스트림)',
+    re.IGNORECASE
+)
+
 def audit_type_rubric_gating(tech_q, full_draft_text):
     """
-    서사 유형(Type A, B, C) 선행 선언 및 배제 기준(Negative Boundary) 위반 시 기계적으로 점수를 3점으로 강제 캡핑(Clamp)
+    5대 직교 서사 유형(Type A, B, C, D, E) 선행 선언 및 배제 기준(Negative Boundary) 위반 시 기계적으로 점수를 3점으로 강제 캡핑(Clamp)
     """
     type_decl = tech_q.get("type_declaration", {})
-    sel_type = type_decl.get("selected_type")
+    raw_type = type_decl.get("selected_type", "")
+    sel_type = TYPE_ALIASES.get(raw_type, raw_type)
     score_b = tech_q.get("scores", {}).get("B", 0)
 
     # 1. 유형 선언 누락 검사 (기존 데이터 호환: 선언 없으면 경고만)
@@ -83,12 +105,48 @@ def audit_type_rubric_gating(tech_q, full_draft_text):
         tech_q["scores"]["B"] = 3
         return f"⚠️ **CLAMPED**: {sel_type} 필수 관찰 증거 미확인으로 B축 점수가 3점으로 기계 강제 하향되었습니다."
 
-    # 3. 배제 조건(Negative Boundary) 위반 플래그 시 하드 캡
+    # 3. Type_D(알고리즘 및 복잡도 최적화) 정량/복잡도 지표 검증
+    if sel_type == "Type_D" and score_b >= 4:
+        combined_text = (must_evidence or "") + " " + full_draft_text
+        if not TYPE_D_PATTERN.search(combined_text):
+            tech_q["scores"]["B"] = 3
+            return f"⚠️ **CLAMPED**: {sel_type} 복잡도 표기(O(..)) 또는 정량 개선 수치(ms, MB, %, 배) 증거 미확인으로 B축 점수가 3점으로 기계 강제 하향되었습니다."
+
+    # 4. Type_E(데이터 및 인프라 파이프라인) 스루풋/지연 수치 검증
+    if sel_type == "Type_E" and score_b >= 4:
+        combined_text = (must_evidence or "") + " " + full_draft_text
+        if not TYPE_E_PATTERN.search(combined_text):
+            tech_q["scores"]["B"] = 3
+            return f"⚠️ **CLAMPED**: {sel_type} 스루풋/지연 수치(TPS, QPS, ms, req/s) 지표 증거 미확인으로 B축 점수가 3점으로 기계 강제 하향되었습니다."
+
+    # 5. 배제 조건(Negative Boundary) 위반 플래그 시 하드 캡
     if type_decl.get("negative_boundary_violated") and score_b > 3:
         tech_q["scores"]["B"] = 3
         return f"⚠️ **CLAMPED**: {sel_type} 전용 배제 기준(Negative Boundary) 위반으로 B축 점수가 3점으로 기계 강제 하향되었습니다."
 
     return f"✅ **PASSED**: {sel_type} 잠금 루브릭(Locked Rubric) 기계 감사 통과"
+
+def audit_axis_c_gating(tech_q, full_draft_text):
+    """
+    축 C (완수 과정 & 리스크 책임) 5점 만점 부여 시,
+    상용 프로덕션 실전성 키워드 또는 독립 제3자 공인 피어 검증(Third-Party Peer Verification) 실존 여부 기계적 감사.
+    단순 학부 과제/수업 프로젝트일 경우 C축을 Max 3점으로 기계 캡핑.
+    """
+    score_c = tech_q.get("scores", {}).get("C", 0)
+    if score_c < 5:
+        return None
+
+    quotes = tech_q.get("quotes", [])
+    combined = " ".join(quotes)
+
+    has_evidence_in_quote = bool(AXIS_C_PROD_PEER_PATTERN.search(combined))
+    has_evidence_in_draft = bool(AXIS_C_PROD_PEER_PATTERN.search(full_draft_text))
+
+    if not has_evidence_in_quote and not has_evidence_in_draft:
+        tech_q["scores"]["C"] = 3
+        return "⚠️ **CLAMPED**: 축 C 5점 부여 요건인 프로덕션 환경 또는 공인 제3자 피어 검증(Third-Party Peer Verification) 증거 부재로 C축 점수가 3점으로 기계 강제 하향되었습니다."
+
+    return "✅ **PASSED**: 축 C 상용 프로덕션/공인 피어 검증 감사 통과"
 
 def main():
     parser = argparse.ArgumentParser(description="자소서 2인 독립 검증 사후 집계기 (grade.py v2.2)")
@@ -138,14 +196,20 @@ def main():
         all_verified_quotes.extend(hr_verified)
         all_verified_quotes.extend(tech_verified)
 
-        # 2. Typed Locked Rubric Gating 기계 감사 집행 (B축 Clamping 선행)
+        # 2. Typed Locked Rubric Gating 기계 감사 집행 (B축 & C축 Clamping 선행)
         hr_axes = dict(hr_q.get("scores", {}))
         tech_axes = dict(tech_q.get("scores", {}))
 
         audit_log = audit_type_rubric_gating(tech_q, full_draft_text)
         if "B" in tech_q.get("scores", {}):
             tech_axes["B"] = tech_q["scores"]["B"]
-        type_audit_logs.append(f"- [문항 {qid}] {audit_log}")
+        type_audit_logs.append(f"- [문항 {qid} B축] {audit_log}")
+
+        c_audit_log = audit_axis_c_gating(tech_q, full_draft_text)
+        if "C" in tech_q.get("scores", {}):
+            tech_axes["C"] = tech_q["scores"]["C"]
+        if c_audit_log:
+            type_audit_logs.append(f"- [문항 {qid} C축] {c_audit_log}")
 
         # 3. 환각 인용 감지 시 감점 자동 롤백 (Score Rollback)
         hr_hallucinated = [v for v in hr_verified if not v["valid"]]

@@ -100,8 +100,9 @@ def main():
 
 [현업 테크 리드 레드팀 평가 원칙]
 1. 칭찬 및 무비판적 만점 부여 절대 금지. 실전 시스템 관점에서 '왜 이 구현이 불합격인가'를 3단계 'So What?'으로 날카롭게 추궁할 것.
-2. Typed Locked Rubric 집행: 문항별로 단 하나의 유형(Type_A / Type_B / Type_C)을 선언하고, 필수 증거가 누락되었거나 Negative Boundary에 저촉되면 예외 없이 Max 3점으로 감점할 것.
-3. 근거 무결성 및 서사 모순 감사: 가짜 수치, 또는 "디테일을 챙긴다"고 공언하고 본문에 오탈자를 방치한 서사 모순 발견 시 J축에서 단호히 감점할 것.
+2. Typed Locked Rubric 집행: 문항별로 단 하나의 직교 서사 유형(Type_A: 의사결정형, Type_B: 심층디버깅형, Type_C: 시스템조망형, Type_D: 알고리즘최적화형, Type_E: 데이터인프라형)을 선언하고, 필수 증거가 누락되었거나 Negative Boundary에 저촉되면 예외 없이 Max 3점으로 감점할 것.
+3. 축 C 상용 프로덕션 실전성 vs 독립 피어 검증: 단순 과제/수업 프로젝트는 Max 3점 캡핑. 실제 트래픽/장애 책임 또는 독립 제3자 공인 피어 검증(스타 100+ 오픈소스 머지 PR, 학술 논문 등재, 공인 벤치마크 SOTA, 실전 SLA/유료 고객 지표) 통과 시에만 5점 인정.
+4. 근거 무결성 및 서사 모순 감사: 가짜 수치, 또는 "디테일을 챙긴다"고 공언하고 본문에 오탈자를 방치한 서사 모순 발견 시 J축에서 단호히 감점할 것.
 
 [공식 부서 맥락 및 공고 스펙]
 {json.dumps(spec_data, ensure_ascii=False, indent=2)}
@@ -120,7 +121,7 @@ def main():
     "1": {{
       "scores": {{"B": 5, "C": 5, "D": 5, "H": 5, "J": 5}},
       "type_declaration": {{
-        "selected_type": "Type_A | Type_B | Type_C",
+        "selected_type": "Type_A | Type_B | Type_C | Type_D | Type_E",
         "justification": "해당 서사 유형을 선택한 명확한 기술적 근거",
         "must_have_evidence_found": "본문에서 발췌한 필수 증거 인용문",
         "negative_boundary_violated": false
@@ -138,7 +139,7 @@ def main():
   ],
   "overall_comment": "현업 테크 리드 총평 및 면접 방어 가능성 소견"
 }}
-(※ selected_type은 반드시 Type_A, Type_B, Type_C 중 단 하나만 선언하십시오. 복수 유형 혼합 시 기계 감사에서 강제 캡핑됩니다.)
+(※ selected_type은 반드시 Type_A, Type_B, Type_C, Type_D, Type_E 중 단 하나만 선언하십시오. 복수 유형 혼합 시 기계 감사에서 강제 캡핑됩니다.)
 (※ quotes 배열에는 반드시 본문에 실존하는 문장만 넣으십시오.)
 """
         tech_packet_path.write_text(tech_prompt, encoding="utf-8")

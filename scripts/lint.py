@@ -18,27 +18,43 @@ def count_metrics(body, metric_type="chars_with_space"):
     지원하는 글자수/바이트 계량 규격:
     - chars_with_space: 공백 포함 글자수 (기본)
     - chars_without_space: 공백 제외 글자수
-    - bytes_euckr: 국내 대기업(삼성, 현대차 등) ATS 표준 (한글 2byte, 영수공백 1byte, 개행 \r\n 2byte)
+    - bytes_euckr: 국내 대기업(삼성, 현대차 등) ATS 표준 시뮬레이션 (Non-ASCII 2byte, ASCII 1byte, 개행 CRLF 2byte)
     - bytes_utf8: UTF-8 바이트 (한글 3byte, 영수 1byte)
     """
     n_all = len(body)
     n_ns = len(re.sub(r'\s', '', body))
     crlf_body = body.replace('\r\n', '\n').replace('\n', '\r\n')
+    
+    # 1. ATS 보수적 계량: 삼성/현대차 등 대기업 웹폼 JS 카운터 (charCode > 127 ? 2 : 1)
+    b_ats = sum(2 if ord(c) > 127 else 1 for c in crlf_body)
+    
+    # 2. Strict EUC-KR 호환성 검사 (비호환 문자 검출)
+    unsupported_chars = []
     try:
-        b_euckr = len(crlf_body.encode('euc-kr'))
+        crlf_body.encode('euc-kr')
     except UnicodeEncodeError:
-        b_euckr = len(crlf_body.encode('cp949', errors='replace'))
+        for ch in crlf_body:
+            try:
+                ch.encode('euc-kr')
+            except UnicodeEncodeError:
+                if ch not in unsupported_chars:
+                    unsupported_chars.append(ch)
+                    
+    b_euckr = b_ats  # 언더카운팅 마감 폭탄 방지를 위해 보수적 ATS 시뮬레이션 계량 적용
     b_utf8 = len(crlf_body.encode('utf-8'))
     
-    summary = f"공백포함 {n_all}자 / 공백제외 {n_ns}자 / EUC-KR {b_euckr}B / UTF-8 {b_utf8}B"
+    summary = f"공백포함 {n_all}자 / 공백제외 {n_ns}자 / ATS(EUC-KR) {b_euckr}B / UTF-8 {b_utf8}B"
+    if unsupported_chars:
+        summary += f" [⚠️ Strict EUC-KR 비호환 문자: {', '.join(unsupported_chars[:5])}]"
+        
     if metric_type == "bytes_euckr":
-        return b_euckr, summary, "EUC-KR Bytes"
+        return b_euckr, summary, "ATS(EUC-KR) Bytes", unsupported_chars
     elif metric_type == "bytes_utf8":
-        return b_utf8, summary, "UTF-8 Bytes"
+        return b_utf8, summary, "UTF-8 Bytes", unsupported_chars
     elif metric_type == "chars_without_space":
-        return n_ns, summary, "공백제외 글자수"
+        return n_ns, summary, "공백제외 글자수", unsupported_chars
     else:
-        return n_all, summary, "공백포함 글자수"
+        return n_all, summary, "공백포함 글자수", unsupported_chars
 
 def sentences(body):
     # '다' 오분리 버그 수정: 마침표, 물음표, 느낌표 및 닫는 따옴표 뒤 공백 기준 분리 (고정 너비 룩비하인드)
@@ -72,10 +88,10 @@ def check_repeated_ngrams(body, n=3):
     return repeated[:4]
 
 STRICT_PUBLIC_PATTERNS = [
-    (r"(부친|모친|아버지|어머니|삼촌|외삼촌|부모님|조부|조모|형제|자매|가족관계)", "공기업 블라인드 금지어: 가족/친인척 신원"),
-    (r"(육군|해군|공군|해병대|의경|공익|상근|현역|병장|하사|장교|복무부대|\b\d+사단\b)", "공기업 블라인드 금지어: 병역/군부대 세부정보"),
-    (r"(\d{2}학번|\d{4}년생|\d{2}년생|\b\d{2}세\b)", "공기업 블라인드 금지어: 연령/학번 신원"),
-    (r"(남성|여성|남학생|여학생)", "공기업 블라인드 금지어: 성별 직접 표기"),
+    (r"(?<![가-힣])(부친|모친|아버지|어머니|삼촌|외삼촌|부모님|조부|조모|형제|자매|가족관계)(?![가-힣])", "공기업 블라인드 금지어: 가족/친인척 신원"),
+    (r"(?<![가-힣])(육군|해군|공군|해병대|의경|공익근무|상근예비역|현역복무|하사|장교|복무부대|\b\d+사단\b)(?![가-힣])", "공기업 블라인드 금지어: 병역/군부대 세부정보"),
+    (r"(\d{2}학번|\d{4}년생|\d{2}년생|\d{2}세(?:의|에|는|은|를|을|인|로|가|와|과|도|로서|라)?(?![가-힣0-9]))", "공기업 블라인드 금지어: 연령/학번 신원"),
+    (r"(?<![가-힣])(남성|여성|남학생|여학생)(?![가-힣])", "공기업 블라인드 금지어: 성별 직접 표기"),
     (r"(출신\s*지역|고향은|태어난\s*곳)", "공기업 블라인드 금지어: 출신 지역")
 ]
 
@@ -87,8 +103,10 @@ def check(qid, body, spec, banned, proper_nouns, blind_level="NONE"):
     elif metric_type == 'without_spaces':
         metric_type = 'chars_without_space'
 
-    current_val, summary, unit_name = count_metrics(body, metric_type)
+    current_val, summary, unit_name, unsupported_chars = count_metrics(body, metric_type)
     out['info']['계량규격'] = f"{unit_name} 기준 ({summary})"
+    if metric_type == "bytes_euckr" and unsupported_chars:
+        out['issues'].append(f'WARN Strict EUC-KR 인코딩 불가 특수문자 발견 ({len(unsupported_chars)}종: {unsupported_chars[:5]}): 대기업 ATS 환경에 따라 깨짐 또는 바이트 오차 가능성')
     
     lo, hi = spec.get('min'), spec.get('max')
     if lo and current_val < lo:
@@ -197,9 +215,10 @@ if __name__ == '__main__':
     blind_level = spec.get('blind_compliance_level', 'NONE')
     spec_questions = spec.get('questions', {})
     
-    # 문항 분할 단언 계약 검사
+    # 문항 분할 단언 계약 검사 (Hard Assertion Gate)
     if spec_questions and len(draft) != len(spec_questions):
-        print(f"\n⚠️ WARN [Segmentation Mismatch]: 초안 파싱 문항 수({len(draft)})와 spec.json 문항 수({len(spec_questions)})가 불일치합니다. 구분자(===qid===)를 점검하십시오.")
+        print(f"\n🚨 CRITICAL FAIL [Segmentation Mismatch]: 초안 파싱 문항 수({len(draft)})와 spec.json 문항 수({len(spec_questions)})가 불일치합니다. 구분자(===qid===)를 점검하십시오.")
+        sys.exit(1)
 
     fails = 0
     for qid, body in draft.items():

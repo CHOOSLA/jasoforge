@@ -80,7 +80,7 @@ REQUIRED_INVARIANTS = [
     ("5대 동적 매핑 매트릭스", "Dynamic Context Binding Matrix"),
     ("동적 페르소나 주입기", "동적 페르소나 주입기"),
 
-    # 10. Runtime Data Contract Standards & Orthogonal Narrative Matrix (v2.7.0)
+    # 10. Runtime Data Contract Standards & Orthogonal Narrative Matrix (v2.7.0 & v2.8.0)
     ("런타임 데이터 계약 표준", "Runtime_Data_Contract_Standards"),
     ("결정론적 소재 필터 계약", "Deterministic_Asset_Filter_Contract"),
     ("장면 패킷 린트 게이트 계약", "Scene_Packet_Lint_Gate_Contract"),
@@ -88,6 +88,9 @@ REQUIRED_INVARIANTS = [
     ("원장 불변성 격리 계약", "Ledger_Append_Only_Isolation_Contract"),
     ("직교적 서사 평가 매트릭스", "Orthogonal_Narrative_Matrix"),
     ("제3자 독립 객관 피어 검증", "Third_Party_Peer_Verification"),
+    ("Type_D 알고리즘 복잡도 최적화", "Type_D: 알고리즘"),
+    ("Type_E 데이터 인프라 파이프라인", "Type_E: 데이터"),
+    ("피어 검증 4대 조작적 정의", "Third_Party_Peer_Verification 4대 범주"),
 ]
 
 def verify_file(skill_path: Path) -> bool:
@@ -98,7 +101,7 @@ def verify_file(skill_path: Path) -> bool:
     content = skill_path.read_text(encoding="utf-8")
     missing = []
 
-    print(f"🔍 Verifying {skill_path.name} against {len(REQUIRED_INVARIANTS)} core invariants...")
+    print(f"🔍 [Tier 1: Document Invariants] Verifying {skill_path.name} against {len(REQUIRED_INVARIANTS)} core invariants...")
     
     for label, keyword in REQUIRED_INVARIANTS:
         if keyword not in content:
@@ -117,10 +120,55 @@ def verify_file(skill_path: Path) -> bool:
         print(f"🎉 100% LOSSLESS PASS: All {len(REQUIRED_INVARIANTS)} invariants are fully preserved!")
         return True
 
+def verify_python_scripts(scripts_dir: Path) -> bool:
+    import py_compile
+    print(f"\n🔍 [Tier 2: Python Syntax Audit] Compiling all python scripts in {scripts_dir.name}...")
+    py_files = sorted(list(scripts_dir.glob("*.py")))
+    if not py_files:
+        print("   ⚠️ No python files found.")
+        return True
+    
+    all_passed = True
+    for py_file in py_files:
+        try:
+            py_compile.compile(str(py_file), doraise=True)
+            print(f"   ✅ Syntax Valid: {py_file.name}")
+        except py_compile.PyCompileError as e:
+            print(f"   ❌ Syntax Error in {py_file.name}: {e}")
+            all_passed = False
+    return all_passed
+
+def verify_json_schemas(root_dir: Path) -> bool:
+    import json
+    print(f"\n🔍 [Tier 3: JSON Integrity Audit] Validating JSON schemas in references/...")
+    ref_dir = root_dir / "references"
+    json_files = sorted(list(ref_dir.glob("*.json"))) if ref_dir.exists() else []
+    
+    all_passed = True
+    for j_file in json_files:
+        try:
+            data = json.loads(j_file.read_text(encoding="utf-8"))
+            print(f"   ✅ JSON Valid: {j_file.name} (keys: {len(data) if isinstance(data, dict) else len(data)})")
+        except Exception as e:
+            print(f"   ❌ Invalid JSON in {j_file.name}: {e}")
+            all_passed = False
+    return all_passed
+
 if __name__ == "__main__":
-    target = Path(__file__).resolve().parent.parent / "SKILL.md"
+    root_dir = Path(__file__).resolve().parent.parent
+    target = root_dir / "SKILL.md"
     if len(sys.argv) > 1:
         target = Path(sys.argv[1])
     
-    success = verify_file(target)
-    sys.exit(0 if success else 1)
+    t1 = verify_file(target)
+    t2 = verify_python_scripts(root_dir / "scripts")
+    t3 = verify_json_schemas(root_dir)
+
+    overall_success = t1 and t2 and t3
+    print("\n" + "=" * 60)
+    if overall_success:
+        print("🚀 [JasoForge Multi-Tier Static Verification Engine] ALL TIERS 100% PASSED!")
+    else:
+        print("💥 [JasoForge Multi-Tier Static Verification Engine] VERIFICATION FAILED!")
+    print("=" * 60)
+    sys.exit(0 if overall_success else 1)
