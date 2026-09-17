@@ -144,15 +144,17 @@ flowchart TD
     %% Step 5: 2단계 검사-판사 독립 채점 (Prosecutor-Judge Architecture)
     subgraph S5 ["Step 5. 2단계 검사-판사 독립 채점 (Prosecutor-Judge Architecture v2.5)"]
         F1["독립 서브에이전트 병렬 격리 호출<br/>(작성 의도 · 이전 대화 컨텍스트 완전 격리)"]
-        F2["5대 입력 패킷 100% 동적 주입:<br/>[1. spec.json + 2. context.json + 3. 헌법 루브릭 + 4. draft.txt + 5. lint 리포트]"]
+        F2["5대 입력 패킷 수신:<br/>[1. spec.json + 2. context.json + 3. 헌법 루브릭 + 4. draft.txt + 5. lint 리포트]"]
+
+        DYNAMIC_INJECT["⚡ 동적 페르소나 주입기 (Dynamic Context Injector)<br/>• 회사: {context.company}<br/>• 부서/직무: {context.department} / {context.job_role}<br/>• 평가 기준 엣지케이스: {context.layer3_job_edge_cases}"]
 
         subgraph S5_P1 ["⚖️ [Phase 1: 기소 단계] 2대 레드팀 검사 (점수 부여 절대 금지)"]
             direction TB
             subgraph AG1_BOX ["🧑‍💼 HR 공격 검사 (HR Prosecutor - 40%)"]
-                AG1["규격 위반, 지시문 이탈, 클리셰, 가치관 비행동화 혐의 기소<br/>• A. 상황 설명 비중 (≤30% 지면 최적화)<br/>• E. 질문 본질 의도 & 플로우 일치<br/>• F. 작성방법 항목 전수 충족<br/>• G. 글자수 규격 준수<br/>• I. 요구 추상화 레벨 & 가치관 지속성"]
+                AG1["규격 위반, 지시문 이탈, 클리셰, 가치관 비행동화 혐의 기소<br/>• A. 상황 설명 비중 (≤30% 지면 최적화)<br/>• E. 질문 본질 의도 & 플로우 일치<br/>• F. 작성방법 항목 전수 충족<br/>• G. 글자수 규격 준수 ({spec.max_chars} 상한 대조)<br/>• I. 요구 추상화 레벨 & 가치관 지속성"]
             end
             subgraph AG2_BOX ["🧑‍💻 현업 테크 리드 검사 (Tech Prosecutor - 60%)"]
-                AG2["기술 허점, 샌드박스 한계, 도메인 엣지케이스 이탈 혐의 기소<br/>• B. 서사 유형별 잠금 앵커 (Type_A/B/C Gating & 조각모음 배제)<br/>• C. 완수 과정 & 리스크 책임 (상용 프로덕션 vs 학술 샌드박스)<br/>• D. 부서 엣지 케이스 & 도메인 불변식 (신입 역할 현실성)<br/>• H. 고유성 (치환 불가 사실 앵커)<br/>• J. 근거 무결성 & 서사 일관성<br/>• 🛡️ 시니어 레드팀 관점 (3단계 So What 추궁)<br/>• 실전 기술면접 킬러 꼬리질문 3선 도출"]
+                AG2["기술 허점, 샌드박스 한계, 도메인 엣지케이스 이탈 혐의 기소<br/>• B. 서사 유형별 잠금 앵커 (Type_A/B/C Gating & 조각모음 배제)<br/>• C. 완수 과정 & 리스크 책임 (상용 프로덕션 vs 학술 샌드박스)<br/>• D. 부서 엣지 케이스 ({context.layer3_job_edge_cases} 미관통 혐의)<br/>• H. 고유성 (치환 불가 사실 앵커)<br/>• J. 근거 무결성 & 서사 일관성<br/>• 🛡️ 시니어 레드팀 관점 (3단계 So What 추궁)<br/>• 실전 기술면접 킬러 꼬리질문 3선 도출"]
             end
         end
 
@@ -161,10 +163,14 @@ flowchart TD
             F3["사후 기계 감사 & 판결 (scripts/grade.py v2.5)<br/>• ① 인용구 실존 감사 (Fuzzy Jaccard Overlap) ➔ 허위/환각 기소 기각(Dismissal)<br/>• ② 시니어 억지 트집 기각 vs 실질 결함 채택 (Fair Assessment)<br/>• ③ 방어 불가능 결함 1건당 헌법적 루브릭(1~5점) 결정론적 감점 선고<br/>• ④ HR(40%) + Tech(60%) = 100점 환산 최종 판결문 & 면접 방어 전략 리포트"]
         end
 
-        F1 --> F2 --> S5_P1 --> S5_P2
+        F1 --> F2 --> DYNAMIC_INJECT --> S5_P1 --> S5_P2
     end
 
-    A4 -.->|동적 컨텍스트 파이프| F2
+    %% 5대 동적 매핑 파이프라인 연결
+    A4 ==>|1. 도메인 엣지케이스 파이프| C2
+    A4 ==>|2. 글자수/지침 규격 파이프| E1
+    A4 ==>|3. 100% 동적 주입 파이프| DYNAMIC_INJECT
+    A4 ==>|4. 네임스페이스 격리 파이프| G1
     B_LOCAL -.->|동적 컨텍스트 파이프| F2
 
     %% Step 6: 회귀 방지 & 점수 원장 기록
@@ -362,6 +368,17 @@ python3 scripts/lint.py <draft.txt> <spec.json>
 - **동적 컨텍스트 바인딩 (Dynamic Context Binding - 하드코딩 영구 금지)**:
   채점관의 페르소나는 어떠한 경우에도 하드코딩되지 않으며, 오직 Step 0에서 생성된 `context.json`의 팩트(`{context.company}`, `{context.department}`, `{context.job_role}`, `{context.edge_cases}`)를 100% 동적으로 주입받아 검사 및 판사의 평가 기준을 구성합니다.
 - **점수 산출 권한 박탈**: 검사는 점수를 절대 매길 수 없으며, 판사(기계 엔진)만이 감사 통과된 결함에 대해 결정론적으로 점수를 차감 선고합니다.
+
+#### 0. ⚡ 5대 동적 매핑 매트릭스 (Dynamic Context Binding Matrix)
+Step 0에서 추출·생성된 `context.json`과 `spec.json`은 파이프라인 전 단계에 걸쳐 하드코딩 없이 유기적으로 동적 바인딩됩니다:
+
+| 파이프라인 단계 | 바인딩 소스 데이터 | 바인딩 대상 및 주입 규칙 | 목적 및 하드코딩 방지 효과 |
+| :--- | :--- | :--- | :--- |
+| **Step 2 (장면 선별)** | `{context.layer3_job_edge_cases}` | 지원 부서의 핵심 기술 난제(불변식)와 경험 매칭 | 부서와 무관한 일반론적 프로젝트 나열 차단, 직격 소재 선별 |
+| **Step 3 (초안 작성)** | `{context.company}`, `{context.department}` | 지원 회사 공식 호칭, 사내 부서/도메인 용어 바인딩 | 타사 명칭 오기입 방지, 현업 부서 친화적 엔지니어링 브리핑 톤 확립 |
+| **Step 4 (기계 린트)** | `{spec.max_chars}`, `{context.company}` | 문항별 상한 글자수(90% 룰), 타사명 마스킹 치환 검사 | 플랫폼/기업별 글자수 규격 준수, 복붙 흔적 및 금지어 결정론적 적발 |
+| **Step 5 (검사-판사)** | `{context.company}`, `{context.department}`, `{context.job_role}`, `{context.layer3_job_edge_cases}` | • **HR 검사**: 지시문/규격 위반 기소<br>• **Tech 검사**: 부서 엣지케이스 D축 기준 주입 및 So What 3단계 추궁<br>• **Meta Judge**: 인용구 실존 감사 및 시니어 억지 트집 기각/결정론적 감점 | 특정 기업/부서 하드코딩 완전 철폐, 온정주의·타협 배제한 독립 감사 |
+| **Step 6 & 8 (원장/로그)** | `{context.company}_{job_role}` | `score_ledger.json`, `revision_log.json` 및 노션 DB 네임스페이스 격리 키 | 다수 기업/직무 지원서 간 점수 및 변경 이력 충돌 원천 방지 |
 
 #### 1. 📊 채점 루브릭 헌법: A~J 10개 공통 축 감점 기준표
 | 축 | 평가 항목 | 구체적 감점 기준 |

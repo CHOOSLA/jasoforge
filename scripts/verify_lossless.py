@@ -77,6 +77,8 @@ REQUIRED_INVARIANTS = [
     # 9. Prosecutor-Judge Architecture & Dynamic Context Binding
     ("2단계 검사-판사 아키텍처", "Prosecutor-Judge Architecture"),
     ("동적 컨텍스트 바인딩", "동적 컨텍스트 바인딩"),
+    ("5대 동적 매핑 매트릭스", "Dynamic Context Binding Matrix"),
+    ("동적 페르소나 주입기", "동적 페르소나 주입기"),
 ]
 
 def verify_file(skill_path: Path) -> bool:
