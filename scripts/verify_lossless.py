@@ -91,6 +91,13 @@ REQUIRED_INVARIANTS = [
     ("Type_D 알고리즘 복잡도 최적화", "Type_D: 알고리즘"),
     ("Type_E 데이터 인프라 파이프라인", "Type_E: 데이터"),
     ("피어 검증 4대 조작적 정의", "Third_Party_Peer_Verification 4대 범주"),
+
+    # 11. Rookie Engineer 4 Core Invariants (v3.0.0 Judicial Panels Consensus)
+    ("신입 엔지니어링 5대 완수 앵커", "신입 엔지니어링 현실적 5대 완수"),
+    ("CS Fundamental Safe Harbor", "CS Fundamental Safe Harbor"),
+    ("80% 하드 하한선 규격", "상한 대비 80% 하드 하한선"),
+    ("고밀도 압축 서술 구제", "고밀도 압축 서술"),
+    ("오탈자 비범죄화 및 교정 권고", "오탈자 비범죄화"),
 ]
 
 def verify_file(skill_path: Path) -> bool:

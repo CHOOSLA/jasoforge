@@ -20,7 +20,7 @@ import platform
 import subprocess
 from pathlib import Path
 
-VERSION = "2.4.0"
+VERSION = "3.0.0"
 SKILL_NAME = "jaso-pipeline"
 BANNER = rf"""
        _                 ______                  

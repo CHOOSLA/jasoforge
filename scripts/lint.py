@@ -74,8 +74,15 @@ def extract_real_paragraphs(body):
             content_paras.append(' '.join(body_lines))
     return content_paras
 
-def check_repeated_ngrams(body, n=3):
-    """연속된 3단어 이상의 동일 구문/클리셰 반복 사용 탐지 (N-gram)"""
+TECH_STOPWORDS = {
+    '위해', '통해', '과정에서', '수', '있었습니다', '분석하여', '처리하고', '구현하여',
+    '발생한', '문제를', '원인을', '파악하고', '개발하고', '적용하여', '진행하며', '개선하여',
+    '대해', '있도록', '위한', '대한', '있는', '것을', '것이', '이를', '하고', '하며',
+    '프로젝트를', '기능을', '데이터를', '시스템을', '코드를'
+}
+
+def check_repeated_ngrams(body, n=4, min_count=2):
+    """연속된 n단어 이상의 동일 구문/클리셰 반복 사용 탐지 (불용어 필터링 탑재)"""
     clean = re.sub(r'[\.\,\!\?\'\"…\(\)\[\]\{\}\<\>\~\`\:\;\-\_]', ' ', body)
     tokens = [t for t in clean.split() if len(t) > 0]
     if len(tokens) < n:
@@ -83,8 +90,13 @@ def check_repeated_ngrams(body, n=3):
     ngrams = [' '.join(tokens[i:i+n]) for i in range(len(tokens) - n + 1)]
     counts = {}
     for ng in ngrams:
+        words = ng.split()
+        # 불용어 비율이 50% 이상이면 일반 한국어 문맥 연결어로 간주하여 제외
+        stop_ratio = sum(1 for w in words if w in TECH_STOPWORDS) / len(words)
+        if stop_ratio >= 0.5:
+            continue
         counts[ng] = counts.get(ng, 0) + 1
-    repeated = [f'"{ng}"({c}회)' for ng, c in counts.items() if c >= 2]
+    repeated = [f'"{ng}"({c}회)' for ng, c in counts.items() if c >= min_count]
     return repeated[:4]
 
 STRICT_PUBLIC_PATTERNS = [
@@ -109,8 +121,14 @@ def check(qid, body, spec, banned, proper_nouns, blind_level="NONE"):
         out['issues'].append(f'WARN Strict EUC-KR 인코딩 불가 특수문자 발견 ({len(unsupported_chars)}종: {unsupported_chars[:5]}): 대기업 ATS 환경에 따라 깨짐 또는 바이트 오차 가능성')
     
     lo, hi = spec.get('min'), spec.get('max')
+    # 상한선 기반 하드 하한선(80%) 및 소프트 안전선(85%)
+    if not lo and hi:
+        lo = int(hi * 0.8)
+
     if lo and current_val < lo:
-        out['issues'].append(f'FAIL 글자수/용량 미달: {current_val} < {lo} ({unit_name})')
+        out['issues'].append(f'FAIL 글자수/용량 미달: {current_val} < {lo} ({unit_name}, 상한 대비 80% 미만)')
+    elif hi and int(hi * 0.8) <= current_val < int(hi * 0.85):
+        out['info']['압축서술구제'] = f"{current_val}/{hi} ({current_val/hi:.1%}) — 고밀도 압축 서술 구간 (핵심 4요소 충족 시 G축 5점 만점 구제 대상)"
     if hi and current_val > hi:
         out['issues'].append(f'FAIL 글자수/용량 초과: {current_val} > {hi} ({unit_name})')
 
@@ -122,9 +140,16 @@ def check(qid, body, spec, banned, proper_nouns, blind_level="NONE"):
         else:
             out['info'].setdefault('항목충족', []).append(f'{item} ← {hits}')
 
-    # 버린 대안(트레이드오프) 키워드 출현 게이트
+    # 버린 대안(트레이드오프) 키워드 출현 게이트 (비기술 문항 면제)
+    q_nature = spec.get('question_nature', '')
+    is_exempt_tradeoff = spec.get('exempt_tradeoff') or q_nature in [
+        'MOTIVATION', 'VALUES', 'VISION', 'COLLABORATION',
+        'MOTIVATION_ASPIRATION', 'CULTURE_COLLAB_SOFT'
+    ]
     discarded_kws = spec.get('discarded_alternative_keywords', [])
-    if discarded_kws:
+    if is_exempt_tradeoff:
+        out['info']['버린대안식별'] = "비기술/지원동기 문항으로 버린 대안(Why Not) 검사 면제 (EXEMPT)"
+    elif discarded_kws:
         d_hits = [dk for dk in discarded_kws if dk in body]
         if not d_hits:
             out['issues'].append(f'WARN 버린 대안(Why Not) 키워드 미발견: {discarded_kws} — B축 감점 방지를 위해 본문 명시 필수')
@@ -188,19 +213,23 @@ def check(qid, body, spec, banned, proper_nouns, blind_level="NONE"):
         if len(set(l // 20 for l in L)) <= 1 and len(L) > 3:
             out['issues'].append('WARN 문장 길이가 균일 — 리듬 없음')
 
-    # N-gram 기반 상투적/중복 구문 탐지
-    rep_ngrams = check_repeated_ngrams(body, n=3)
+    # N-gram 기반 상투적/중복 구문 탐지 (4-gram 2회 이상 또는 3-gram 3회 이상, 불용어 제외)
+    rep_ngrams = check_repeated_ngrams(body, n=4, min_count=2)
+    if not rep_ngrams:
+        rep_ngrams = check_repeated_ngrams(body, n=3, min_count=3)
     if rep_ngrams:
-        out['info']['중복어구(3-gram)'] = ', '.join(rep_ngrams)
+        out['info']['중복어구(N-gram)'] = ', '.join(rep_ngrams)
         if len(rep_ngrams) >= 3:
-            out['issues'].append(f'WARN 동일 3-gram 어구 {len(rep_ngrams)}건 반복 — 문장 단조로움 점검 권장')
+            out['issues'].append(f'WARN 동일 N-gram 어구 {len(rep_ngrams)}건 반복 — 문장 단조로움 점검 권장')
 
-    # 첫 본문 단락 비중 (소제목 제외 후 실제 상황 설명 30% 룰 측정)
-    if real_paras:
+    # 첫 본문 단락 비중 (소제목 제외 후 실제 상황 설명 측정, 500자 이하 면제)
+    n_all = len(body)
+    if n_all > 500 and real_paras:
         r = len(real_paras[0]) / n_all if n_all > 0 else 0
         out['info']['첫본문단락비중'] = f'{r:.0%} ({len(real_paras[0])}/{n_all}자)'
-        if r > 0.35:
-            out['issues'].append(f'WARN 첫 본문 단락이 {r:.0%} — 상황 설명 30% 초과 가능 (배경 압축 권장)')
+        threshold = 0.45 if q_nature in ['MOTIVATION', 'VALUES', 'VISION', 'COLLABORATION', 'MOTIVATION_ASPIRATION', 'CULTURE_COLLAB_SOFT'] else 0.35
+        if r > threshold:
+            out['issues'].append(f'WARN 첫 본문 단락이 {r:.0%} — 상황 설명 {int(threshold*100)}% 초과 가능 (배경 압축 권장)')
             
     return out
 

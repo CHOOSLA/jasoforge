@@ -79,21 +79,33 @@ TYPE_ALIASES = {
 }
 
 TYPE_D_PATTERN = re.compile(r'(O\([^)]+\)|\d+(?:\.\d+)?\s*(?:ms|s|초|%|MB|GB|배|fps|qps))', re.IGNORECASE)
+TYPE_D_SEMANTIC_PATTERN = re.compile(r'(쿼리|조회|N\+1|인덱스|캐시|캐싱|배치|batch|지연|병목|감축|절감|단축|경량화|자료구조|메모리|누수|프로파일링|실행\s*시간|반복문|알고리즘)', re.IGNORECASE)
+
 TYPE_E_PATTERN = re.compile(r'(\d+(?:\.\d+)?\s*(?:qps|tps|ms|초|건/초|mbps|gbps|req/s)|TPS|QPS|SLA|파이프라인)', re.IGNORECASE)
-AXIS_C_PROD_PEER_PATTERN = re.compile(
+TYPE_E_SEMANTIC_PATTERN = re.compile(r'(비동기|메시지\s*큐|Kafka|RabbitMQ|스트림|파이프라인|백프레셔|스케일|커넥션\s*풀|처리량|이벤트|분산|배치\s*작업|I/O|버퍼|워커)', re.IGNORECASE)
+
+# 상용 프로덕션 + 독립 피어 검증 + 신입 엔지니어링 5대 완수 앵커 통합 패턴
+AXIS_C_RIGOR_PATTERN = re.compile(
     r'(운영|장애|트래픽|SLA|유료|마감|배포|프로덕션|상용|고객사|서비스|'
-    r'PR|머지|merge|등재|논문|학회|SOTA|벤치마크|스타\s*\d+|오픈소스|업스트림)',
+    r'PR|머지|merge|등재|논문|학회|SOTA|벤치마크|스타\s*\d+|오픈소스|업스트림|'
+    r'피드백|프리티어|OOM|스왑|swap|k6|JMeter|Locust|부하|병목|커넥션\s*풀|'
+    r'린터|linter|Husky|CI|GitHub Actions|멱등성|트랜잭션|정합성|불변식|핫픽스|Sentry|프로파일링)',
     re.IGNORECASE
 )
 
-def audit_type_rubric_gating(tech_q, full_draft_text):
+def audit_type_rubric_gating(tech_q, full_draft_text, question_nature=None):
     """
-    5대 직교 서사 유형(Type A, B, C, D, E) 선행 선언 및 배제 기준(Negative Boundary) 위반 시 기계적으로 점수를 3점으로 강제 캡핑(Clamp)
+    5대 직교 서사 유형(Type A, B, C, D, E) 선행 선언 및 의미론적 맥락 구제(Semantic Fallback) 엔진
     """
     type_decl = tech_q.get("type_declaration", {})
     raw_type = type_decl.get("selected_type", "")
     sel_type = TYPE_ALIASES.get(raw_type, raw_type)
     score_b = tech_q.get("scores", {}).get("B", 0)
+
+    # 0. 비기술 문항(지원동기, 성격/가치관, 포부)은 버린 대안 3점 Clamping 면제
+    is_exempt = question_nature in ['MOTIVATION', 'VALUES', 'VISION', 'COLLABORATION'] or type_decl.get("exempt_tradeoff")
+    if is_exempt:
+        return f"ℹ️ **EXEMPT**: 비기술/지원동기 문항으로 서사 유형 게이팅 면제 적용"
 
     # 1. 유형 선언 누락 검사 (기존 데이터 호환: 선언 없으면 경고만)
     if not sel_type or sel_type not in ["Type_A", "Type_B", "Type_C", "Type_D", "Type_E"]:
@@ -105,19 +117,32 @@ def audit_type_rubric_gating(tech_q, full_draft_text):
         tech_q["scores"]["B"] = 3
         return f"⚠️ **CLAMPED**: {sel_type} 필수 관찰 증거 미확인으로 B축 점수가 3점으로 기계 강제 하향되었습니다."
 
-    # 3. Type_D(알고리즘 및 복잡도 최적화) 정량/복잡도 지표 검증
+    # 3. Type_D(알고리즘 및 복잡도 최적화) 3단계 의미론적 맥락 구제
     if sel_type == "Type_D" and score_b >= 4:
         combined_text = (must_evidence or "") + " " + full_draft_text
         if not TYPE_D_PATTERN.search(combined_text):
-            tech_q["scores"]["B"] = 3
-            return f"⚠️ **CLAMPED**: {sel_type} 복잡도 표기(O(..)) 또는 정량 개선 수치(ms, MB, %, 배) 증거 미확인으로 B축 점수가 3점으로 기계 강제 하향되었습니다."
+            # Tier 2: 의미론적 맥락 패턴 매칭 검사
+            semantic_hits = TYPE_D_SEMANTIC_PATTERN.findall(combined_text)
+            if len(set(semantic_hits)) >= 2:
+                # 공학적 개선 인과관계가 확실하면 PASS
+                pass
+            else:
+                # Tier 3: 정량 수치 및 핵심 용어 미달 시 4점 Soft Clamp
+                tech_q["scores"]["B"] = 4
+                return f"ℹ️ **SOFT CLAMPED**: {sel_type} 정량 수치 토큰 부재로 B축 점수가 4점(소프트 캡)으로 보정되었습니다."
 
-    # 4. Type_E(데이터 및 인프라 파이프라인) 스루풋/지연 수치 검증
+    # 4. Type_E(데이터 및 인프라 파이프라인) 3단계 의미론적 맥락 구제
     if sel_type == "Type_E" and score_b >= 4:
         combined_text = (must_evidence or "") + " " + full_draft_text
         if not TYPE_E_PATTERN.search(combined_text):
-            tech_q["scores"]["B"] = 3
-            return f"⚠️ **CLAMPED**: {sel_type} 스루풋/지연 수치(TPS, QPS, ms, req/s) 지표 증거 미확인으로 B축 점수가 3점으로 기계 강제 하향되었습니다."
+            # Tier 2: 의미론적 맥락 패턴 매칭 검사
+            semantic_hits = TYPE_E_SEMANTIC_PATTERN.findall(combined_text)
+            if len(set(semantic_hits)) >= 2:
+                # 파이프라인 병목 해소 인과관계 확인 시 PASS
+                pass
+            else:
+                tech_q["scores"]["B"] = 4
+                return f"ℹ️ **SOFT CLAMPED**: {sel_type} 정량 스루풋 토큰 부재로 B축 점수가 4점(소프트 캡)으로 보정되었습니다."
 
     # 5. 배제 조건(Negative Boundary) 위반 플래그 시 하드 캡
     if type_decl.get("negative_boundary_violated") and score_b > 3:
@@ -129,8 +154,8 @@ def audit_type_rubric_gating(tech_q, full_draft_text):
 def audit_axis_c_gating(tech_q, full_draft_text):
     """
     축 C (완수 과정 & 리스크 책임) 5점 만점 부여 시,
-    상용 프로덕션 실전성 키워드 또는 독립 제3자 공인 피어 검증(Third-Party Peer Verification) 실존 여부 기계적 감사.
-    단순 학부 과제/수업 프로젝트일 경우 C축을 Max 3점으로 기계 캡핑.
+    상용 프로덕션 실전성, 공인 피어 검증, 또는 신입 엔지니어링 5대 완수 앵커 실존 여부 기계적 감사.
+    단순 로컬 샌드박스 안주/튜토리얼 복붙일 경우 C축을 Max 3점으로 기계 캡핑.
     """
     score_c = tech_q.get("scores", {}).get("C", 0)
     if score_c < 5:
@@ -139,14 +164,14 @@ def audit_axis_c_gating(tech_q, full_draft_text):
     quotes = tech_q.get("quotes", [])
     combined = " ".join(quotes)
 
-    has_evidence_in_quote = bool(AXIS_C_PROD_PEER_PATTERN.search(combined))
-    has_evidence_in_draft = bool(AXIS_C_PROD_PEER_PATTERN.search(full_draft_text))
+    has_evidence_in_quote = bool(AXIS_C_RIGOR_PATTERN.search(combined))
+    has_evidence_in_draft = bool(AXIS_C_RIGOR_PATTERN.search(full_draft_text))
 
     if not has_evidence_in_quote and not has_evidence_in_draft:
         tech_q["scores"]["C"] = 3
-        return "⚠️ **CLAMPED**: 축 C 5점 부여 요건인 프로덕션 환경 또는 공인 제3자 피어 검증(Third-Party Peer Verification) 증거 부재로 C축 점수가 3점으로 기계 강제 하향되었습니다."
+        return "⚠️ **CLAMPED**: 축 C 5점 부여 요건인 프로덕션 실전성/신입 5대 완수 앵커(배포, OOM극복, 부하테스트, 린터, 멱등성) 증거 부재로 C축 점수가 3점으로 기계 강제 하향되었습니다."
 
-    return "✅ **PASSED**: 축 C 상용 프로덕션/공인 피어 검증 감사 통과"
+    return "✅ **PASSED**: 축 C 상용 프로덕션/신입 완수 책임/공인 피어 검증 감사 통과"
 
 def main():
     parser = argparse.ArgumentParser(description="자소서 2인 독립 검증 사후 집계기 (grade.py v2.2)")
@@ -155,6 +180,7 @@ def main():
     parser.add_argument("tech_eval", help="테크 리드 평가 결과 JSON 파일 경로")
     parser.add_argument("--hr-weight", type=float, default=0.4, help="HR 가중치 (기본값: 0.4)")
     parser.add_argument("--tech-weight", type=float, default=0.6, help="테크 리드 가중치 (기본값: 0.6)")
+    parser.add_argument("--spec", help="공고 명세 spec.json 경로 (옵션)")
     parser.add_argument("--out", help="출력 마크다운 리포트 파일 경로 (옵션)")
     args = parser.parse_args()
 
@@ -162,6 +188,7 @@ def main():
     full_draft_text = " ".join(draft.values())
     hr_data = json.loads(Path(args.hr_eval).read_text(encoding='utf-8'))
     tech_data = json.loads(Path(args.tech_eval).read_text(encoding='utf-8'))
+    spec_data = json.loads(Path(args.spec).read_text(encoding='utf-8')) if args.spec and Path(args.spec).exists() else {}
 
     total_w = args.hr_weight + args.tech_weight
     w_hr = args.hr_weight / total_w
@@ -186,6 +213,8 @@ def main():
     for qid in q_ids:
         hr_q = hr_data.get("questions", {}).get(qid, {})
         tech_q = tech_data.get("questions", {}).get(qid, {})
+        q_spec = spec_data.get("questions", {}).get(qid, {})
+        q_nature = q_spec.get("question_nature") or tech_q.get("question_nature") or hr_q.get("question_nature")
 
         # 1. 문항별 인용구 무결성 검증 (Word Bi-gram + Token Jaccard)
         hr_quotes = hr_q.get("quotes", [])
@@ -200,7 +229,7 @@ def main():
         hr_axes = dict(hr_q.get("scores", {}))
         tech_axes = dict(tech_q.get("scores", {}))
 
-        audit_log = audit_type_rubric_gating(tech_q, full_draft_text)
+        audit_log = audit_type_rubric_gating(tech_q, full_draft_text, question_nature=q_nature)
         if "B" in tech_q.get("scores", {}):
             tech_axes["B"] = tech_q["scores"]["B"]
         type_audit_logs.append(f"- [문항 {qid} B축] {audit_log}")

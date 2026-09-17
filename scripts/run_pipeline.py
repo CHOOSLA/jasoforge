@@ -100,9 +100,9 @@ def main():
 
 [현업 테크 리드 레드팀 평가 원칙]
 1. 칭찬 및 무비판적 만점 부여 절대 금지. 실전 시스템 관점에서 '왜 이 구현이 불합격인가'를 3단계 'So What?'으로 날카롭게 추궁할 것.
-2. Typed Locked Rubric 집행: 문항별로 단 하나의 직교 서사 유형(Type_A: 의사결정형, Type_B: 심층디버깅형, Type_C: 시스템조망형, Type_D: 알고리즘최적화형, Type_E: 데이터인프라형)을 선언하고, 필수 증거가 누락되었거나 Negative Boundary에 저촉되면 예외 없이 Max 3점으로 감점할 것.
-3. 축 C 상용 프로덕션 실전성 vs 독립 피어 검증: 단순 과제/수업 프로젝트는 Max 3점 캡핑. 실제 트래픽/장애 책임 또는 독립 제3자 공인 피어 검증(스타 100+ 오픈소스 머지 PR, 학술 논문 등재, 공인 벤치마크 SOTA, 실전 SLA/유료 고객 지표) 통과 시에만 5점 인정.
-4. 근거 무결성 및 서사 모순 감사: 가짜 수치, 또는 "디테일을 챙긴다"고 공언하고 본문에 오탈자를 방치한 서사 모순 발견 시 J축에서 단호히 감점할 것.
+2. Typed Locked Rubric 집행: 기술 프로젝트 문항은 Type_A~E 중 하나를 선언하고 필수 증거 결여 시 Max 3점 캡핑. (단, 지원동기, 포부, 인성 문항은 버린 대안 및 유형 강제 면제/EXEMPT).
+3. 축 C 신입 엔지니어링 5대 완수 인정: 상용 프로덕션뿐만 아니라, ① 실사용자 수십 명 배포 & 핫픽스, ② 1GB RAM 프리티어 OOM 극복, ③ k6/JMeter 가상 부하 시뮬레이션, ④ 커스텀 Linter/CI 도구화, ⑤ 멱등성/트랜잭션 락 방어, 또는 독립 피어 검증(Star 100+ PR, 논문 등) 중 1개라도 실증되면 5점 만점 인정.
+4. 축 H CS Safe Harbor & 축 J 근거 무결성: OS, 네트워크, DB 등 탄탄한 CS 원리 서술 시 회사 고유명사 없어도 H축 5점 보장. 측정하지 않은 0MB 등 '가짜 수치 날조'는 J축에서 단호히 감점하되, 사소한 오탈자 1~2개는 단순 교정 권고(INFO)로 처리하여 서사 모순 비약을 금지함.
 
 [공식 부서 맥락 및 공고 스펙]
 {json.dumps(spec_data, ensure_ascii=False, indent=2)}
@@ -164,7 +164,8 @@ def main():
         sys.executable, str(grade_script),
         str(draft_path), str(args.hr_eval), str(args.tech_eval),
         "--hr-weight", str(args.hr_weight),
-        "--tech-weight", str(args.tech_weight)
+        "--tech-weight", str(args.tech_weight),
+        "--spec", str(spec_path)
     ]
     if args.out:
         grade_cmd.extend(["--out", str(args.out)])
