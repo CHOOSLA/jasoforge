@@ -68,6 +68,11 @@ REQUIRED_INVARIANTS = [
     ("로컬 자립 모드", "로컬 자립"),
     ("spec.json 명세", "spec.json"),
     ("score_ledger 점수 원장", "score_ledger"),
+
+    # 8. Smart Ingestion & Asset Lookup Architecture
+    ("스마트 입력 감지 관문", "Smart Ingestion Gateway"),
+    ("노션 원장 선행 조회", "Asset Lookup-First"),
+    ("Audit-First 직행 플로우", "Audit-First"),
 ]
 
 def verify_file(skill_path: Path) -> bool:
