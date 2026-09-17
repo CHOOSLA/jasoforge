@@ -80,15 +80,14 @@ REQUIRED_INVARIANTS = [
     ("5대 동적 매핑 매트릭스", "Dynamic Context Binding Matrix"),
     ("동적 페르소나 주입기", "동적 페르소나 주입기"),
 
-    # 10. 4 Runtime Data Contracts & 5 Narrative Types (v2.6.0)
-    ("4대 런타임 데이터 계약", "4대 런타임 데이터 계약"),
-    ("소재 매칭 하드 필터 계약", "Project_Taxonomy_And_Deterministic_Filter_Contract"),
-    ("장면 패킷 린트 게이트 계약", "Scene_Packet_Strict_JSON_And_Lint_Token_Gate_Contract"),
-    ("구조화 드래프트 파서 계약", "Structured_Draft_Artifact_And_Segmentation_Assertion_Contract"),
-    ("원장 불변성 격리 계약", "Ledger_Append_Only_Delta_And_Scope_Isolation_Contract"),
-    ("Type_D 알고리즘 최적화형", "Type_D"),
-    ("Type_E 데이터 인프라형", "Type_E"),
-    ("R&D 학술 논문 5점 인정", "KCI/SCI 논문 등재"),
+    # 10. Runtime Data Contract Standards & Orthogonal Narrative Matrix (v2.7.0)
+    ("런타임 데이터 계약 표준", "Runtime_Data_Contract_Standards"),
+    ("결정론적 소재 필터 계약", "Deterministic_Asset_Filter_Contract"),
+    ("장면 패킷 린트 게이트 계약", "Scene_Packet_Lint_Gate_Contract"),
+    ("문항 분할 단언 계약", "Draft_Segmentation_Assertion_Contract"),
+    ("원장 불변성 격리 계약", "Ledger_Append_Only_Isolation_Contract"),
+    ("직교적 서사 평가 매트릭스", "Orthogonal_Narrative_Matrix"),
+    ("제3자 독립 객관 피어 검증", "Third_Party_Peer_Verification"),
 ]
 
 def verify_file(skill_path: Path) -> bool:
