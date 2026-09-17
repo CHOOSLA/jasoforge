@@ -100,5 +100,14 @@ class TestSmartIngestionRouter(unittest.TestCase):
         self.assertEqual(res_sync["mode"], "NOTION_SYNC")
         self.assertEqual(res_sync["next_action"], "LOOKUP_NOTION_AND_AUDIT_FIRST")
 
+    def test_case_notion_draft_url(self):
+        """Case 8: 노션 페이지 링크(notion.so/...) 유입 시 CASE_NOTION_DRAFT_URL 인식 검증"""
+        user_in = "https://www.notion.so/my-workspace/daou-draft-31bf58c3261e81d6aad0e3c2bdb637e3 다우기술 이거 평가해봐"
+        res = SmartIngestionRouter.route_input(user_in, has_notion_env=True)
+        self.assertEqual(res["detected_case"], "CASE_NOTION_DRAFT_URL")
+        self.assertTrue(res["is_draft"])
+        self.assertEqual(res["company"], "다우기술")
+        self.assertEqual(res["next_action"], "READ_NOTION_PAGE_AND_AUDIT_FIRST")
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

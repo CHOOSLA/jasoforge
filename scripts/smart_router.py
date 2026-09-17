@@ -10,9 +10,15 @@ import re
 from typing import Dict, Any, Optional
 
 class SmartIngestionRouter:
-    # 1. URL 패턴 (모든 유효한 웹 URL 및 채용 도메인 매칭)
+    # 1. 일반 웹 URL 패턴
     URL_PATTERN = re.compile(
         r'https?://[a-zA-Z0-9\-._~:/?#[\]@!$&\'()*+,;=%]+',
+        re.IGNORECASE
+    )
+
+    # 1-0. 노션 페이지 URL 패턴 (자소서 초안 페이지 직접 인입)
+    NOTION_URL_PATTERN = re.compile(
+        r'https?://(?:www\.)?notion\.(?:so|site)/[a-zA-Z0-9\-._~:/?#[\]@!$&\'()*+,;=%]+',
         re.IGNORECASE
     )
 
@@ -71,7 +77,21 @@ class SmartIngestionRouter:
             "question_prompt": None
         }
 
-        # Case 1: URL이 포함되어 있는 경우
+        # Case 1-0: 노션 페이지 URL이 직접 인입된 경우 (Notion Draft Audit-First)
+        notion_match = cls.NOTION_URL_PATTERN.search(text)
+        if notion_match:
+            notion_url = notion_match.group(0)
+            result["detected_case"] = "CASE_NOTION_DRAFT_URL"
+            result["url"] = notion_url
+            result["is_draft"] = True
+            for comp in cls.KNOWN_COMPANIES:
+                if comp in text:
+                    result["company"] = comp
+                    break
+            result["next_action"] = "READ_NOTION_PAGE_AND_AUDIT_FIRST"
+            return result
+
+        # Case 1: 일반 채용 공고 URL이 포함되어 있는 경우
         url_match = cls.URL_PATTERN.search(text)
         if url_match:
             result["detected_case"] = "CASE_1_URL"
