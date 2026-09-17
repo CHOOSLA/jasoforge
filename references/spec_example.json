@@ -1,0 +1,36 @@
+{
+  "company": "뱅크웨어글로벌",
+  "role": "코어뱅킹 개발자",
+  "banned": ["OO대학교", "[가-힣]+대학교", "[가-힣]+학과", "졸업논문"],
+  "proper_nouns": [
+    "뱅크웨어글로벌", "코어뱅킹", "BX-Integrator", "Android", "iOS",
+    "JNI", "OpenAPI", "TypeScript", "ERP", "ReleaseByteArrayElements",
+    "ExamplePage", "Storybook", "Java", "C++", "MVP", "Props", "OWASP", "SSL Pinning"
+  ],
+  "questions": {
+    "1": {
+      "min": 400, "max": 800, "basis": "with_spaces",
+      "required_items": {
+        "어려움 극복을 위해 취했던 행동": ["추가", "호출하도록", "맞췄", "해제"],
+        "수행 결과물": ["사라졌", "해결", "비정상 종료"],
+        "결과물 도출을 위한 노력": ["확인했습니다", "공부", "기본서", "조사"]
+      }
+    },
+    "2": {
+      "min": 400, "max": 800, "basis": "with_spaces",
+      "required_items": {
+        "의견 교류": ["설명했습니다", "제안", "논의", "함께 확인"],
+        "합의 도출": ["합의", "받아들"],
+        "그룹에 미친 영향": ["팀원들은", "갱신", "확인했습니다"]
+      }
+    },
+    "3": {
+      "min": 400, "max": 800, "basis": "with_spaces",
+      "required_items": {
+        "갖추어 온 역량": ["해왔습니다", "전담", "맡아"],
+        "근거 기반 구체 기술": ["10개 서비스", "OpenAPI", "TypeScript", "인증서", "OWASP"],
+        "지원 분야 연결": ["코어뱅킹", "BX-Integrator", "3rd Party"]
+      }
+    }
+  }
+}
