@@ -1,6 +1,9 @@
 {
   "company": "뱅크웨어글로벌",
   "role": "코어뱅킹 개발자",
+  "length_metric_type": "chars_with_space",
+  "blind_compliance_level": "NONE",
+  "target_role_domain_nature": "COMMERCIAL_PRODUCTION",
   "banned": ["OO대학교", "[가-힣]+대학교", "[가-힣]+학과", "졸업논문"],
   "proper_nouns": [
     "뱅크웨어글로벌", "코어뱅킹", "BX-Integrator", "Android", "iOS",

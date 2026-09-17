@@ -13,6 +13,33 @@ def load(path):
 def count(body):
     return len(body), len(re.sub(r'\s', '', body))
 
+def count_metrics(body, metric_type="chars_with_space"):
+    """
+    지원하는 글자수/바이트 계량 규격:
+    - chars_with_space: 공백 포함 글자수 (기본)
+    - chars_without_space: 공백 제외 글자수
+    - bytes_euckr: 국내 대기업(삼성, 현대차 등) ATS 표준 (한글 2byte, 영수공백 1byte, 개행 \r\n 2byte)
+    - bytes_utf8: UTF-8 바이트 (한글 3byte, 영수 1byte)
+    """
+    n_all = len(body)
+    n_ns = len(re.sub(r'\s', '', body))
+    crlf_body = body.replace('\r\n', '\n').replace('\n', '\r\n')
+    try:
+        b_euckr = len(crlf_body.encode('euc-kr'))
+    except UnicodeEncodeError:
+        b_euckr = len(crlf_body.encode('cp949', errors='replace'))
+    b_utf8 = len(crlf_body.encode('utf-8'))
+    
+    summary = f"공백포함 {n_all}자 / 공백제외 {n_ns}자 / EUC-KR {b_euckr}B / UTF-8 {b_utf8}B"
+    if metric_type == "bytes_euckr":
+        return b_euckr, summary, "EUC-KR Bytes"
+    elif metric_type == "bytes_utf8":
+        return b_utf8, summary, "UTF-8 Bytes"
+    elif metric_type == "chars_without_space":
+        return n_ns, summary, "공백제외 글자수"
+    else:
+        return n_all, summary, "공백포함 글자수"
+
 def sentences(body):
     # '다' 오분리 버그 수정: 마침표, 물음표, 느낌표 및 닫는 따옴표 뒤 공백 기준 분리 (고정 너비 룩비하인드)
     clean = body.replace('\n', ' ')
@@ -44,17 +71,30 @@ def check_repeated_ngrams(body, n=3):
     repeated = [f'"{ng}"({c}회)' for ng, c in counts.items() if c >= 2]
     return repeated[:4]
 
-def check(qid, body, spec, banned, proper_nouns):
+STRICT_PUBLIC_PATTERNS = [
+    (r"(부친|모친|아버지|어머니|삼촌|외삼촌|부모님|조부|조모|형제|자매|가족관계)", "공기업 블라인드 금지어: 가족/친인척 신원"),
+    (r"(육군|해군|공군|해병대|의경|공익|상근|현역|병장|하사|장교|복무부대|\b\d+사단\b)", "공기업 블라인드 금지어: 병역/군부대 세부정보"),
+    (r"(\d{2}학번|\d{4}년생|\d{2}년생|\b\d{2}세\b)", "공기업 블라인드 금지어: 연령/학번 신원"),
+    (r"(남성|여성|남학생|여학생)", "공기업 블라인드 금지어: 성별 직접 표기"),
+    (r"(출신\s*지역|고향은|태어난\s*곳)", "공기업 블라인드 금지어: 출신 지역")
+]
+
+def check(qid, body, spec, banned, proper_nouns, blind_level="NONE"):
     out = {'문항': qid, 'issues': [], 'info': {}}
-    n_all, n_ns = count(body)
-    out['info']['글자수'] = f'공백포함 {n_all} / 공백제외 {n_ns}'
+    metric_type = spec.get('length_metric_type', spec.get('basis', 'chars_with_space'))
+    if metric_type == 'with_spaces':
+        metric_type = 'chars_with_space'
+    elif metric_type == 'without_spaces':
+        metric_type = 'chars_without_space'
+
+    current_val, summary, unit_name = count_metrics(body, metric_type)
+    out['info']['계량규격'] = f"{unit_name} 기준 ({summary})"
+    
     lo, hi = spec.get('min'), spec.get('max')
-    basis = spec.get('basis', 'with_spaces')
-    n = n_all if basis == 'with_spaces' else n_ns
-    if lo and n < lo:
-        out['issues'].append(f'FAIL 글자수 미달: {n} < {lo} ({basis})')
-    if hi and n > hi:
-        out['issues'].append(f'FAIL 글자수 초과: {n} > {hi} ({basis})')
+    if lo and current_val < lo:
+        out['issues'].append(f'FAIL 글자수/용량 미달: {current_val} < {lo} ({unit_name})')
+    if hi and current_val > hi:
+        out['issues'].append(f'FAIL 글자수/용량 초과: {current_val} > {hi} ({unit_name})')
 
     # 작성방법 항목 커버리지 — 키워드 0건이면 확실한 누락 신호
     for item, kws in spec.get('required_items', {}).items():
@@ -64,8 +104,26 @@ def check(qid, body, spec, banned, proper_nouns):
         else:
             out['info'].setdefault('항목충족', []).append(f'{item} ← {hits}')
 
-    # 금지어 (블라인드 등)
-    for b in banned:
+    # 버린 대안(트레이드오프) 키워드 출현 게이트
+    discarded_kws = spec.get('discarded_alternative_keywords', [])
+    if discarded_kws:
+        d_hits = [dk for dk in discarded_kws if dk in body]
+        if not d_hits:
+            out['issues'].append(f'WARN 버린 대안(Why Not) 키워드 미발견: {discarded_kws} — B축 감점 방지를 위해 본문 명시 필수')
+        else:
+            out['info']['버린대안식별'] = f"확인됨: {d_hits}"
+
+    # 블라인드 레벨 분기 적용
+    effective_banned = list(banned)
+    if blind_level == "ACADEMIC_RND_PERMISSIVE":
+        # R&D 직무: 졸업논문, 연구실(Lab), 학회 발표 허용
+        effective_banned = [b for b in effective_banned if "논문" not in b and "연구실" not in b]
+    elif blind_level == "STRICT_PUBLIC_INSTITUTION":
+        for pat, desc in STRICT_PUBLIC_PATTERNS:
+            if re.search(pat, body):
+                out['issues'].append(f'FAIL {desc} 발견: /{pat}/')
+
+    for b in effective_banned:
         if re.search(b, body):
             out['issues'].append(f'FAIL 금지 표현 발견: /{b}/')
 
@@ -136,9 +194,21 @@ if __name__ == '__main__':
     spec = json.loads(Path(sys.argv[2]).read_text(encoding='utf-8'))
     banned = spec.get('banned', [])
     pn = spec.get('proper_nouns', [])
+    blind_level = spec.get('blind_compliance_level', 'NONE')
+    spec_questions = spec.get('questions', {})
+    
+    # 문항 분할 단언 계약 검사
+    if spec_questions and len(draft) != len(spec_questions):
+        print(f"\n⚠️ WARN [Segmentation Mismatch]: 초안 파싱 문항 수({len(draft)})와 spec.json 문항 수({len(spec_questions)})가 불일치합니다. 구분자(===qid===)를 점검하십시오.")
+
     fails = 0
     for qid, body in draft.items():
-        r = check(qid, body, spec['questions'].get(qid, {}), banned, pn)
+        q_spec = spec_questions.get(qid, {})
+        # 전역 length_metric_type 상속
+        if 'length_metric_type' not in q_spec and 'length_metric_type' in spec:
+            q_spec['length_metric_type'] = spec['length_metric_type']
+            
+        r = check(qid, body, q_spec, banned, pn, blind_level=blind_level)
         print(f"\n{'='*52}\n[문항 {r['문항']}]")
         for k, v in r['info'].items():
             print(f'  {k}: {v}' if not isinstance(v, list) else f'  {k}:\n' + ''.join(f'    - {x}\n' for x in v).rstrip())

@@ -166,11 +166,16 @@ flowchart TD
         F1 --> F2 --> DYNAMIC_INJECT --> S5_P1 --> S5_P2
     end
 
-    %% 5대 동적 매핑 파이프라인 연결
-    A4 ==>|1. 도메인 엣지케이스 파이프| C2
-    A4 ==>|2. 글자수/지침 규격 파이프| E1
-    A4 ==>|3. 100% 동적 주입 파이프| DYNAMIC_INJECT
-    A4 ==>|4. 네임스페이스 격리 파이프| G1
+    %% 전 단계 E2E 동적 바인딩 파이프라인 연결 (Shift-Left)
+    A4 ==>|1. Step 1: 마감일·ATS링크·트랙 메타 파이프| S1
+    A4 ==>|2. Step 2: 직무성격·인재상 1차 하드필터 파이프| C1
+    C2 ==>|3. Step 2➔3: 장면 4요소 scene_packets.json 계약| D5
+    A4 ==>|4. Step 3: 도메인 문체 헌법 파이프| D5
+    D6 ==>|5. Step 3➔4: draft.json SSOT 및 문항분할 단언| E1
+    A4 ==>|6. Step 4: 바이트계량·블라인드규격 파이프| E1
+    A4 ==>|7. Step 5: 도메인불변식·R&D5점앵커·5대서사 파이프| DYNAMIC_INJECT
+    A4 ==>|8. Step 6/8: 복합네임스페이스 파이프| G1
+    F3 ==>|9. Step 7: 원장 Append-Only 격리 환류 파이프| D1
     B_LOCAL -.->|동적 컨텍스트 파이프| F2
 
     %% Step 6: 회귀 방지 & 점수 원장 기록
@@ -369,41 +374,61 @@ python3 scripts/lint.py <draft.txt> <spec.json>
   채점관의 페르소나는 어떠한 경우에도 하드코딩되지 않으며, 오직 Step 0에서 생성된 `context.json`의 팩트(`{context.company}`, `{context.department}`, `{context.job_role}`, `{context.edge_cases}`)를 100% 동적으로 주입받아 검사 및 판사의 평가 기준을 구성합니다.
 - **점수 산출 권한 박탈**: 검사는 점수를 절대 매길 수 없으며, 판사(기계 엔진)만이 감사 통과된 결함에 대해 결정론적으로 점수를 차감 선고합니다.
 
-#### 0. ⚡ 5대 동적 매핑 매트릭스 (Dynamic Context Binding Matrix)
-Step 0에서 추출·생성된 `context.json`과 `spec.json`은 파이프라인 전 단계에 걸쳐 하드코딩 없이 유기적으로 동적 바인딩됩니다:
+#### 0. ⚡ 전 단계 E2E 동적 바인딩 종합 매트릭스 (E2E Dynamic Context Binding Matrix)
+Step 0의 단일 진실 공급원(SSOT: `context.json` & `spec.json`)은 입수·가공(Step 1~3)부터 사후 검증·원장 환류(Step 4~8)까지 전 과정을 100% 수직 관통합니다:
 
-| 파이프라인 단계 | 바인딩 소스 데이터 | 바인딩 대상 및 주입 규칙 | 목적 및 하드코딩 방지 효과 |
+| 파이프라인 단계 | 바인딩 소스 데이터 | 바인딩 대상 및 주입 규칙 | 목적 및 해결되는 실전 치명적 결함 |
 | :--- | :--- | :--- | :--- |
-| **Step 2 (장면 선별)** | `{context.layer3_job_edge_cases}` | 지원 부서의 핵심 기술 난제(불변식)와 경험 매칭 | 부서와 무관한 일반론적 프로젝트 나열 차단, 직격 소재 선별 |
-| **Step 3 (초안 작성)** | `{context.company}`, `{context.department}` | 지원 회사 공식 호칭, 사내 부서/도메인 용어 바인딩 | 타사 명칭 오기입 방지, 현업 부서 친화적 엔지니어링 브리핑 톤 확립 |
-| **Step 4 (기계 린트)** | `{spec.max_chars}`, `{context.company}` | 문항별 상한 글자수(90% 룰), 타사명 마스킹 치환 검사 | 플랫폼/기업별 글자수 규격 준수, 복붙 흔적 및 금지어 결정론적 적발 |
-| **Step 5 (검사-판사)** | `{context.company}`, `{context.department}`, `{context.job_role}`, `{context.layer3_job_edge_cases}` | • **HR 검사**: 지시문/규격 위반 기소<br>• **Tech 검사**: 부서 엣지케이스 D축 기준 주입 및 So What 3단계 추궁<br>• **Meta Judge**: 인용구 실존 감사 및 시니어 억지 트집 기각/결정론적 감점 | 특정 기업/부서 하드코딩 완전 철폐, 온정주의·타협 배제한 독립 감사 |
-| **Step 6 & 8 (원장/로그)** | `{context.company}_{job_role}` | `score_ledger.json`, `revision_log.json` 및 노션 DB 네임스페이스 격리 키 | 다수 기업/직무 지원서 간 점수 및 변경 이력 충돌 원천 방지 |
+| **Step 1 (공고 세팅)** | `{spec.deadline}`, `{spec.application_url}`, `{context.recruitment_track_type}` | • `🏢 회사별 지원 현황`<br>• `📄 지원서 아카이브` v1 | 캘린더 마감 알림 활성화, 공식 ATS 즉시 점프 링크 확보, 복수 트랙 분리로 **미아 지원서 발생 원천 차단** |
+| **Step 2 (소재 매칭)** | `{context.target_role_domain_nature}`, `{context.company_core_values}` | • 문항 의도 분석(I축)<br>• 경험 아카이브 1차 하드 필터링<br>• 장면 4요소 표 작성 | 현대차(무결점/안전)에 규정 우회 소재 차단, R&D에 단순 CRUD 게시판 소재 차단 ➔ **소재 선정 GIGO 원천 봉쇄** |
+| **Step 3 (초안 작성)** | `{context.company}`, `{context.department}`, `{context.domain_tone_directive}`, `{context.domain_core_invariants}` | • 직무별 문체 헌법 프롬프트<br>• Engineering Narrative v7.0 작성기 | R&D 가설검증/Ablation Study 톤, 금융 99.999% 무중단 트랜잭션 톤, 모빌리티 Fail-Safe 톤 주입 ➔ **깡통 CS 자소서 박멸** |
+| **Step 4 (기계 린트)** | `{spec.max_chars}`, `{spec.length_metric_type}`, `{spec.blind_compliance_level}` | • `lint.py` 글자수/바이트 계량기<br>• 블라인드 금지어 검사기 | 삼성/현대차 Byte ATS 불일치로 인한 **마감 직전 200% 초과 접수 폭파 방지**, 공기업 블라인드 즉각 실격 방지, R&D 학술 성과 오작동 방지 |
+| **Step 5 (검사-판사)** | `{context.domain_core_invariants}`, `{context.target_role_domain_nature}`, 5대 서사유형, `{context.evaluator_weight_preset}` | • `rubric_tech.json` 슬롯<br>• 축 C 완수 책임 5점 앵커<br>• 검사-판사 독립 채점 | 루브릭 내 금융 하드코딩 박멸, **R&D 학술 연구(KCI 논문 등) 5점 만점 인정(자가당착 해소)**, 5대 서사 유형(Type A~E) 부당 감점 방지 |
+| **Step 6, 7, 8 (원장/로그)** | `{context.application_unique_key}`, 복원된 비선형 서사 (`{fact_provenance}`) | • `score_ledger.json` / `📊 채점 기록 DB`<br>• `🗂️ 경험 인덱스 DB` (Flywheel)<br>• `revision_log.json` | 복합키(`{season}_{company}_{track}_{role}`)로 원장 충돌 방지, 복원된 팩트의 Append-Only 누적으로 **차기 지원서의 영구적 Ground Truth 자산화** |
+
+#### 0-1. 🏛️ 4대 런타임 데이터 계약 (Data Contract Standards)
+다이어그램 연결을 넘어 실전 런타임 크래시와 데이터 유실을 방지하는 엄격한 데이터 계약입니다:
+
+1. **`Project_Taxonomy_And_Deterministic_Filter_Contract` (Step 0 ➔ 2)**:
+   - 경험 원장 3대 표준 축(`target_role_nature`, `engineering_tier`, `core_value_tags`)을 선언.
+   - 지원 직무 성격(`target_role_domain_nature`)에 따른 1차 하드 필터링을 강제하여 현대차 자율주행에 웹 쇼핑몰을 추천하는 환각 오매칭 원천 차단.
+2. **`Scene_Packet_Strict_JSON_And_Lint_Token_Gate_Contract` (Step 2 ➔ 3/4)**:
+   - Step 2의 산출물로 `scene_packets.json` Strict Schema 강제.
+   - `scripts/lint.py`에서 '버린 대안(Why Not)' 핵심 토큰의 본문 출현을 기계 단언(Lint Gatekeeper)하여 초안에서 대안이 누락되어 B축 2점으로 감점되는 현상 방지.
+3. **`Structured_Draft_Artifact_And_Segmentation_Assertion_Contract` (Step 3 ➔ 4/5)**:
+   - Step 3의 주 산출물을 문항 배열 객체인 `draft.json` (Primary SSOT)으로 확정.
+   - 텍스트 파서 실행 시 `assert len(chunks) == len(spec.questions)` 단언문으로 비표준 문항 머리말로 인한 파서 크래시 및 400% 글자수 폭사 방지.
+4. **`Ledger_Append_Only_Delta_And_Scope_Isolation_Contract` (Step 7 ➔ 원장 DB)**:
+   - 원장 마스터 블록(`[Master Verified Ground Truth]`) 수정/대체 일체 금지 (READ-ONLY 잠금).
+   - 복원된 서사는 최하단 `[💡 Restored Decisions]`에 Append-Only(추가 전용) 리스트로만 누적하며 전역 승격 시 사용자 명시 컨펌(`Human-in-the-loop Gate`) 의무화.
 
 #### 1. 📊 채점 루브릭 헌법: A~J 10개 공통 축 감점 기준표
 | 축 | 평가 항목 | 구체적 감점 기준 |
 | :--- | :--- | :--- |
 | **A** | 상황 설명 비중 | 첫 문단/배경 설명이 전체 분량의 20~30%를 초과하거나 나열식 기능 설명이 장황할 경우 감점 |
-| **B** | 판단 근거 & Why 의식 | 합리적 판단 이유(Why) 결여 시 감점.<br>• **선택/의사결정형(Type_A)**: 제약 ➔ 실제 선택 ➔ 버린 대안(트레이드오프) 3요소 필수.<br>• **원인규명/디버깅형(Type_B)**: 하위 시스템(메모리/바이트코드/인자) 원인 규명 및 패치 완수.<br>• **시스템조망형(Type_C)**: 단일 시스템 아키텍처 상호작용 필수. 무관한 복수 프로젝트 조각모음 시 '독소 2'로 Max 3점 캡. |
-| **C** | 완수 과정 & 리스크 책임 | **상용 프로덕션 실전성 vs 학술 샌드박스 분별**: 고객사 마감 압박, 인프라 비용 한계, 실제 트래픽과 서비스 중단 위험이 존재하는 **상용 프로덕션 환경에서의 리스크 선제 방어(5점)**와, 실패해도 비즈니스 손해가 없는 **통제된 학술/과제 샌드박스(3점 제한)**를 엄격히 분별하여 감점 |
-| **D** | 부서 엣지 케이스 & 도메인 핵심 불변식 | **도메인 핵심 불변식(Core Invariant) & 신입 역할 현실성**:<br>• 도메인의 핵심 불변식(예: 분산 트랜잭션 멱등성, 통신 암호화, DB 커넥션 병목, 비동기 재처리 등)과 신입의 현실적 기여 계획 제시 시 5점 만점.<br>• 단순 언어 키워드 매칭에 머무르거나 비현실적인 코어 재작성 포부는 엄격 감점 (3점 이하) |
+| **B** | 판단 근거 & Why 의식 | 합리적 판단 이유(Why) 결여 시 감점.<br>• **5대 표준 서사 유형(Type_A~E)** 선행 선언 및 Locked Rubric 적용.<br>• 미선언 또는 필수 관찰 증거 미확인 시 Max 3점 강제 캡핑. |
+| **C** | 완수 과정 & 리스크 책임 | **상용 프로덕션 실전성 vs 학술 샌드박스 분별**:<br>• 상용 프로덕션 환경에서의 2차 리스크 선제 방어 시 5점.<br>• **R&D 연구직 지원 시 SOTA 대비 정량적 개선, 피어 리뷰 통과(KCI/SCI 논문 등재, 특허), 재현성 검증 시 5점 만점 인정**.<br>• 실패해도 손해 없는 통제된 단순 과제/수업 프로젝트는 3점 제한. |
+| **D** | 부서 엣지 케이스 & 도메인 핵심 불변식 | **도메인 핵심 불변식(Core Invariant) & 신입 역할 현실성**:<br>• 지원 부서의 핵심 불변식({context.domain_core_invariants})과 신입의 현실적 기여 계획 제시 시 5점 만점.<br>• 단순 키워드 매칭에 머무르거나 비현실적인 코어 전면 재작성 포부는 엄격 감점 (3점 이하) |
 | **E** | 질문 본질 의도 & 플로우 일치 | 질문이 묻는 본질적 평가 의도를 관통하지 못하거나 지시문의 서술 순서·논리 플로우를 이탈하면 감점 |
 | **F** | 작성방법 항목 전수 충족 | 문항 지시문에서 요구한 항목(행동, 결과물, 노력, 합의, 영향 등) 중 하나라도 빠지면 감점 |
-| **G** | 글자수 규격 준수 | 지정된 글자수 범위(상한 대비 90% 이상)를 벗어나면 감점.<br>• **규격 선행 확정(Spec Resolution)**: 상한 미지정 초안 유입 시 에이전트가 문항별 상한 글자수를 선행 질문(`ask_question`)하여 확정. 날림 5점 만점 부여 절대 금지.<br>• **자유 양식 대응**: 완전 자유 양식일 경우 업계 표준(700~800자) 기준 적용 또는 G축 N/A(가중치 제외) 처리로 점수 인플레이션 원천 차단. |
+| **G** | 글자수 규격 준수 | 지정된 글자수/바이트 범위({spec.length_metric_type}, 상한 대비 90% 이상)를 벗어나면 감점.<br>• **규격 선행 확정(Spec Resolution)**: 상한 미지정 초안 유입 시 에이전트가 문항별 상한 글자수를 선행 질문(`ask_question`)하여 확정. 날림 5점 만점 부여 절대 금지.<br>• **자유 양식 대응**: 완전 자유 양식일 경우 업계 표준(700~800자) 기준 적용 또는 G축 N/A(가중치 제외) 처리로 점수 인플레이션 원천 차단. |
 | **H** | 고유성 (치환 불가성) | 고유명사를 뺐을 때 타사/타직무 어디에나 통하는 일반론 문장이 존재하면 감점 *(단, 보편적 CS Fundamental 서술은 제외)* |
-| **I** | 요구 추상화 레벨 & 가치관 지속성 | 문항이 요구한 층위(습관/태도/원칙/가치관)와 어긋나거나, 추상어를 쓰거나, 현재 업무 행동으로의 지속성이 결여되면 감점 |
+| **I** | 요구 추상화 레벨 & 가치관 지속성 | 문항이 요구한 층위(습관/태도/원칙/가치관)와 어긋나거나, 기업 인재상({context.company_core_values})에 반하거나, 현재 업무 행동으로의 지속성이 결여되면 감점 |
 | **J** | 근거 무결성 & 서사 일관성 | 원장에 없는 과장된 수치, 지어낸 주장, 가짜 팩트, 오탈자/비문이 발견되면 즉시 탈락(FAIL) |
 
-#### 2. 🛡️ Typed Locked Rubric Gating
-- **서사 유형 선행 선언**: 테크 리드는 채점 전 문항 서사 유형을 `[Type_A: 의사결정형]`, `[Type_B: 심층디버깅형]`, `[Type_C: 시스템조망형]` 중 단 하나만 선언.
-- **Type_A [의사결정형]**: 버린 대안 1건 이상 + 기술적 트레이드오프 필수 (미달 시 Max 3점 강제 캡핑).
-- **Type_B [심층디버깅형]**: 하위 계층(메모리/바이트코드/자료구조) 원인 규명 + 재발 방지 완수 필수 (미달 시 Max 3점 강제 캡핑).
-- **Type_C [시스템조망형]**: 단일 아키텍처 내 컴포넌트 간 인터페이스 결속 조망 필수. 서로 다른 프로젝트를 백화점식으로 나열한 조각모음은 '독소 2'로 간주하여 Max 3점 강제 캡핑.
+#### 2. 🛡️ Typed Locked Rubric Gating (5대 표준 서사 체계)
+- **서사 유형 선행 선언**: 테크 리드는 채점 전 문항 서사 유형을 5대 표준 유형 중 단 하나만 선언:
+  1. `[Type_A: 기술적 의사결정형]`: 버린 대안 1건 이상 + 기술적 트레이드오프 필수 (미달 시 Max 3점 캡핑).
+  2. `[Type_B: 심층 디버깅/Grit형]`: 하위 계층(메모리/바이트코드/네이티브) 원인 규명 + 재발 방지 패치 완수 필수 (미달 시 Max 3점 캡핑).
+  3. `[Type_C: 시스템 조망형]`: 단일 아키텍처 내 컴포넌트 간 인터페이스 결속 조망 필수. 단순 복수 프로젝트 조각모음은 '독소 2'로 Max 3점 캡핑.
+  4. `[Type_D: 알고리즘 복잡도 최적화형]`: 시간/공간 복잡도 개선(O(N²)→O(N log N)) 및 실측 벤치마크 필수 (미달 시 Max 3점 캡핑).
+  5. `[Type_E: 데이터/인프라 파이프라인형]`: 대용량 분산 처리 스루풋 개선 및 I/O 지연 최소화 조치 필수 (미달 시 Max 3점 캡핑).
 - **환각 인용 점수 롤백**: 감점 사유에 달린 인용문이 본문에 실존하지 않으면 허위 감점으로 판정하고 5.0점 만점으로 자동 롤백.
 
 #### 3. 2인 독립 평가 페르소나 분담 (HR 40% : 현업 테크 리드 60%)
 - **HR 인사담당자 (40%)**: A, E, F, G, I 축 채점. 조직 핏 및 지시문 호응 검증.
 - **현업 테크 리드 (60%)**: B, C, D, H, J 축 채점. **시니어 레드팀 관점(3단계 So What 추궁)** 적용 및 **실전 킬러 꼬리질문 3선과 추천 방어 논리** 도출.
+- **평가관 가중치 프리셋 ({context.evaluator_weight_preset})**: 기본 균형형(`BALANCED [4:6]`), 테크 주도형(`TECH_DRIVEN [3:7]`), 공기업/공공기관형(`HR_PUBLIC_DRIVEN [6:4]`) 지원.
 
 ---
 

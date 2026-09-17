@@ -74,7 +74,7 @@ def audit_type_rubric_gating(tech_q, full_draft_text):
     score_b = tech_q.get("scores", {}).get("B", 0)
 
     # 1. 유형 선언 누락 검사 (기존 데이터 호환: 선언 없으면 경고만)
-    if not sel_type or sel_type not in ["Type_A", "Type_B", "Type_C"]:
+    if not sel_type or sel_type not in ["Type_A", "Type_B", "Type_C", "Type_D", "Type_E"]:
         return "Type 미선언 (기존 데이터 호환)"
 
     # 2. 필수 증거 인용구 실존 검사
