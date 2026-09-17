@@ -98,6 +98,12 @@ REQUIRED_INVARIANTS = [
     ("80% 하드 하한선 규격", "상한 대비 80% 하드 하한선"),
     ("고밀도 압축 서술 구제", "고밀도 압축 서술"),
     ("오탈자 비범죄화 및 교정 권고", "오탈자 비범죄화"),
+
+    # 12. Execution Mode Switches & Local Direct Routing (v3.1.0)
+    ("2대 실행 모드 스위치", "2대 실행 모드 스위치"),
+    ("로컬 초고속 모드 Zero Notion", "Zero Notion API Call"),
+    ("노션 엔터프라이즈 동기화 모드", "Notion Enterprise Sync"),
+    ("스마트 기본 정책 로컬 직행", "스마트 기본 정책"),
 ]
 
 def verify_file(skill_path: Path) -> bool:

@@ -7,7 +7,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-emerald.svg?style=flat-square)](LICENSE)
 [![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg?style=flat-square)](https://www.python.org/)
-[![Version](https://img.shields.io/badge/version-3.0.0-cyan.svg?style=flat-square)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-3.1.0-cyan.svg?style=flat-square)](CHANGELOG.md)
 [![결정적 린트](https://img.shields.io/badge/lint-결정적검사-green.svg?style=flat-square)](scripts/lint.py)
 
 <p align="center">

@@ -76,5 +76,29 @@ class TestSmartIngestionRouter(unittest.TestCase):
         self.assertEqual(res["detected_case"], "CASE_FALLBACK_QUERY")
         self.assertTrue(res["needs_user_question"])
 
+    def test_case_file_draft_routing(self):
+        """Case 6: PDF나 TXT 파일 경로 유입 시 CASE_FILE_DRAFT 인식 및 로컬 감사 직행 검증"""
+        user_in = "/Users/choosla/Downloads/다우기술.pdf 이거 평가해봐"
+        res = SmartIngestionRouter.route_input(user_in, has_notion_env=True)
+        self.assertEqual(res["detected_case"], "CASE_FILE_DRAFT")
+        self.assertEqual(res["file_path"], "/Users/choosla/Downloads/다우기술.pdf")
+        self.assertEqual(res["company"], "다우기술")
+        self.assertEqual(res["mode"], "LOCAL", "File path audit should default to LOCAL mode")
+        self.assertEqual(res["next_action"], "LOCAL_AUDIT_FIRST", "Should bypass Notion and audit locally")
+
+    def test_execution_mode_flags(self):
+        """Case 7: --local 및 --sync-notion 플래그에 따른 결정론적 분기 검증"""
+        # --local 강제 시 노션 환경이 있어도 LOCAL_AUDIT_FIRST 직행
+        local_in = "[문항 1] 다우기술 지원동기 ... (200자 이상 본문) " + "테스트 " * 40 + " --local"
+        res_local = SmartIngestionRouter.route_input(local_in, has_notion_env=True)
+        self.assertEqual(res_local["mode"], "LOCAL")
+        self.assertEqual(res_local["next_action"], "LOCAL_AUDIT_FIRST")
+
+        # --sync-notion 강제 시 노션 조회 활성화
+        sync_in = "/Users/choosla/Downloads/다우기술.pdf --sync-notion"
+        res_sync = SmartIngestionRouter.route_input(sync_in, has_notion_env=True)
+        self.assertEqual(res_sync["mode"], "NOTION_SYNC")
+        self.assertEqual(res_sync["next_action"], "LOOKUP_NOTION_AND_AUDIT_FIRST")
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

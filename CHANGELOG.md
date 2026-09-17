@@ -4,6 +4,31 @@
 
 ---
 
+## [v3.1.0] — 2026-09-18: 2대 명시적 실행 모드 스위치(--local vs --sync-notion) 및 파일 경로 즉시 감사 라우팅 탑재
+
+### 1. 개정 배경 및 문제의식 (Why Change?)
+- **로컬 파일 전달 시 불필요한 노션 DB 조회 지연 버그 박멸**:
+  - 사용자가 `/jaso-pipeline /Users/choosla/Downloads/다우기술.pdf 이거 평가해봐`를 입력했을 때, 기존 라우터가 파일명 속 '다우기술'만 보고 `CASE_4_COMPANY_CALL`로 분류하여 엉뚱하게 `easy-notion/query_database`를 호출, 눈앞에 있는 로컬 파일을 두고 노션에서 초안을 찾는 심각한 라우팅 결함 발생.
+- **사용자의 날카로운 모드 분리 제안 반영**:
+  - *"이런 것에 대한 모드도 있어야 할 것 같은데"* ➔ 사용자가 원하는 것은 단순 감사(Audit)일 때 노션 API 지연 없이 1초 만에 로컬 검사를 끝내는 것이며, 공식 지원서 확정 시에만 노션 동기화가 필요함.
+- **해결 조치**:
+  - 로컬 파일 경로(`.pdf`, `.txt`, `.md` 등)를 초안으로 즉시 인식하는 `CASE_FILE_DRAFT` 관문 신설.
+  - 노션 호출을 100% 원천 차단하는 `--local`과 노션 DB 완결 연동을 지시하는 `--sync-notion`의 **2대 명시적 실행 모드 스위치** 구축.
+
+### 2. 핵심 변경 내역
+1. **`smart_router.py`**:
+   - `FILE_PATH_PATTERN` 신설: 절대경로, 상대경로 파일 유입 시 `CASE_FILE_DRAFT`로 즉시 분류.
+   - `LOCAL_FLAGS` (`--local`, `-l`, `--quick`, `--offline`, `로컬` 등) 및 `NOTION_FLAGS` (`--sync-notion`, `-s`, `--notion` 등) 파싱 엔진 탑재.
+   - **스마트 기본 정책 (Smart Default Policy)**: 파일 경로가 주어지거나 단순 평가/린트 지시어 유입 시 기본 모드를 `LOCAL`로 강제하여 **노션 도구 호출을 100% 바이패스(Zero Notion Calls)**.
+2. **`SKILL.md`**:
+   - 2대 실행 모드 스위치(`--local` vs `--sync-notion`) 명세 및 스마트 기본 정책 헌법화.
+3. **`test_ingestion_routing.py`**:
+   - `test_case_file_draft_routing` 및 `test_execution_mode_flags` 테스트 케이스 2종 신설 (총 7개 테스트 전원 100% PASS).
+4. **`verify_lossless.py`**:
+   - Group 12 [실행 모드 스위치 & 로컬 직행 불변식 4종] 추가 (총 71개 핵심 불변식 100% 무손실 검증).
+
+---
+
 ## [v3.0.0] — 2026-09-18: 신입 개발자 눈높이 3대 사법 패널 합의안 전면 집행 및 균형 잡힌 엔진 승격
 
 ### 1. 개정 배경 및 문제의식 (Why Change?)
