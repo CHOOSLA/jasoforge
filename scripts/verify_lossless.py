@@ -104,6 +104,13 @@ REQUIRED_INVARIANTS = [
     ("로컬 초고속 모드 Zero Notion", "Zero Notion API Call"),
     ("노션 엔터프라이즈 동기화 모드", "Notion Enterprise Sync"),
     ("스마트 기본 정책 로컬 직행", "스마트 기본 정책"),
+
+    # 13. Knockout Red Flag Judicial Architecture (v3.2.0)
+    ("Knockout Red Flag 사법 게이트키퍼", "Knockout Red Flag 사법 게이트"),
+    ("치명적 결함 결정론적 하드 클램프", "결정론적 하드 클램프"),
+    ("자아과잉 코어 계승 레드 플래그", "자아과잉"),
+    ("서사 모순 및 오탈자 누적 게이트", "치명적 오탈자"),
+    ("조각모음 백화점식 나열 게이트", "조각모음"),
 ]
 
 def verify_file(skill_path: Path) -> bool:

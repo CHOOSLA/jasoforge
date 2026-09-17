@@ -140,7 +140,7 @@ flowchart TD
         E3["즉시 기계적 수정 루프<br/>(AI 주관 개입 차단)"]
         E4["PASS"]
 
-        subgraph LINT_RULES ["lint.py v2.4 검증 규칙"]
+        subgraph LINT_RULES ["lint.py v3.2 검증 규칙"]
             direction TB
             LR1["• 글자수 규격 검사 (공백 포함/제외, 90% 이상)"]
             LR2["• 작성방법 항목별 키워드 충족도 (0건 FAIL)"]
@@ -148,6 +148,7 @@ flowchart TD
             LR4["• 10대 상투적 클리셰 탐지 ('다양한 경험을 통해' 등)"]
             LR5["• 블라인드 금지어 검출 (학교/학과/연구실 등)"]
             LR6["• 문장 길이 분포 및 리듬 검사"]
+            LR7["• 치명적 오탈자 검출 및 3건 이상 누적 시 FAIL"]
         end
 
         E1 --> LINT_RULES --> E2
@@ -156,7 +157,7 @@ flowchart TD
     end
 
     %% Step 5: 2단계 검사-판사 독립 채점 (Prosecutor-Judge Architecture)
-    subgraph S5 ["Step 5. 2단계 검사-판사 독립 채점 (Prosecutor-Judge Architecture v2.5)"]
+    subgraph S5 ["Step 5. 2단계 검사-판사 사법 채점 (Prosecutor-Judge Architecture v3.2)"]
         F1["독립 서브에이전트 병렬 격리 호출<br/>(작성 의도 · 이전 대화 컨텍스트 완전 격리)"]
         F2["5대 입력 패킷 수신:<br/>[1. spec.json + 2. context.json + 3. 헌법 루브릭 + 4. draft.txt + 5. lint 리포트]"]
 
@@ -174,7 +175,19 @@ flowchart TD
 
         subgraph S5_P2 ["⚖️ [Phase 2: 판결 단계] 메타 감사관 & 결정론적 판사 (Meta-Judge Engine)"]
             direction TB
-            F3["사후 기계 감사 & 판결 (scripts/grade.py v2.5)<br/>• ① 인용구 실존 감사 (Fuzzy Jaccard Overlap) ➔ 허위/환각 기소 기각(Dismissal)<br/>• ② 시니어 억지 트집 기각 vs 실질 결함 채택 (Fair Assessment)<br/>• ③ 방어 불가능 결함 1건당 헌법적 루브릭(1~5점) 결정론적 감점 선고<br/>• ④ HR(40%) + Tech(60%) = 100점 환산 최종 판결문 & 면접 방어 전략 리포트"]
+            F3["사후 기계 감사 & 판결 (scripts/grade.py v3.2)<br/>• ① 인용구 실존 감사 (Fuzzy Jaccard Overlap) ➔ 허위/환각 기소 기각<br/>• ② 시니어 억지 트집 기각 vs 실질 결함 채택 (Fair Assessment)<br/>• ③ 방어 불가능 결함 1건당 헌법적 루브릭(1~5점) 결정론적 감점 선고"]
+
+            F3_GATE{"🚨 Knockout Red Flag 사법 게이트<br/>(자아과잉 · 오탈자 3건 이상 · 조각모음 중<br/>SUSTAINED 채택이 1건이라도 있는가?)"}
+
+            F3_CLAMP["🛑 [결정론적 하드 클램프 (Hard Clamp)]<br/>• 10개 축 선형 가중합 전면 무효화<br/>• 총점 Max 75.0점 강제 캡핑 (70~73점 선고)<br/>• 최종 판정: DEFECT (불합격권 선고)"]
+
+            F3_NORMAL["✅ [정상 가중 합산 (Normal Weighted)]<br/>• HR(40%) + Tech(60%) 정밀 10개 축 합산<br/>• 90~100점대 정상 선형 랭킹 산출<br/>• 최종 판정: PASS (합격권 선고)"]
+
+            F3_REPORT["최종 사법 판결문 & 면접 방어 전략 리포트 출력"]
+
+            F3 --> F3_GATE
+            F3_GATE -- "예 (치명적 결함 적발: 탈락본)" --> F3_CLAMP --> F3_REPORT
+            F3_GATE -- "아니오 (ALL CLEAR: 합격본)" --> F3_NORMAL --> F3_REPORT
         end
 
         F1 --> F2 --> DYNAMIC_INJECT --> S5_P1 --> S5_P2
@@ -189,7 +202,7 @@ flowchart TD
     A4 ==>|6. Step 4: 바이트계량·블라인드규격 파이프| E1
     A4 ==>|7. Step 5: 도메인불변식·R&D5점앵커·5대서사 파이프| DYNAMIC_INJECT
     A4 ==>|8. Step 6/8: 복합네임스페이스 파이프| G1
-    F3 ==>|9. Step 7: 원장 Append-Only 격리 환류 파이프| D1
+    F3_REPORT ==>|9. Step 7: 원장 Append-Only 격리 환류 파이프| D1
     B_LOCAL -.->|동적 컨텍스트 파이프| F2
 
     %% Step 6: 회귀 방지 & 점수 원장 기록
@@ -198,7 +211,7 @@ flowchart TD
         G2{"버전 간 비교<br/>(v1 대비 점수 하락 축 감지)"}
         G3["진동 방지 국소 수정<br/>(이미 확보된 축 보호)"]
 
-        F3 --> G1 --> G2
+        F3_REPORT --> G1 --> G2
         G2 -- 점수 하락 (퇴행) --> G3
     end
 
@@ -351,19 +364,20 @@ AI의 주관을 배제하고 파이썬 스크립트로 엄격 판정 (FAIL 시 �
 python3 scripts/lint.py <draft.txt> <spec.json>
 ```
 
-**검증 6대 규칙 (신입 개발자 합리적 린트 기준선)**:
+**검증 7대 규칙 (신입 개발자 합리적 린트 기준선)**:
 1. **글자수 검사**: 공백 포함 및 공백 제외 양쪽 범위 체크 (**상한선 대비 80% 하드 하한선** 적용. 80~84% 구간은 핵심 내용이 완결된 경우 '고밀도 압축 서술'로 5점 만점 구제).
 2. **작성방법 항목별 키워드 충족도**: 필수 항목별 키워드 출현 횟수가 `0건`이면 필수 항목 누락으로 즉시 FAIL. (단, 지원동기/가치관/인성 등 비기술 문항은 '버린 대안' 린트 게이트 자동 면제 - EXEMPT).
 3. **매크로 고유명사 밀도 검사**: 문항 전체에 회사/도메인 고유명사가 0건일 때 일반론 복붙 자소서로 `WARN` 경고. (CS Fundamental 원리 서술 시 안전지대 보장).
 4. **상투적 클리셰 템플릿 탐지**: "다양한 경험을 통해", "성실함을 무기로", "최선을 다해 노력" 등 공허한 상투구 자동 적발.
 5. **블라인드 금지어 검출**: 대학교, 학과, 랩실 등 인적사항 필터링.
 6. **문장 길이 분포 및 리듬 검사**: 과도하게 긴 만연체 문장 적발 및 호흡 조율. (기술 전문용어 불용어 필터링으로 어휘 반복 오경보 차단).
+7. **치명적 오탈자 및 맞춤법 누적 검사 (Knockout 사전 차단)**: 명백한 오탈자(`곳➔곧`, `끕어올려➔끌어올려`, `가늘할➔가늠할`, `옷기던/옷겨본➔옮기던/옮겨본` 등) 검출 및 지원서 전체 3건 이상 누적 방치 시 `CRITICAL FAIL`로 Step 5 진입 전 즉시 차단.
 
 ---
 
-### [Step 5] 2단계 검사-판사 독립 채점 & 사후 기계 감사 (`grade.py`)
+### [Step 5] 2단계 검사-판사 사법 채점 & Knockout 게이트키퍼 (`grade.py`)
 
-단일 평가 프롬프트에서 필연적으로 발생하는 **온정주의(Politeness Bias)와 내부 타협(Compromise Bias)**을 원천 차단하기 위해, 최신 Multi-Agent Eval 아키텍처를 도입하여 **[Phase 1: 기소 단계 (검사/Red Teamer)]**와 **[Phase 2: 판결 단계 (판사/Meta-Judge)]**로 물리적 역할을 엄격히 이원화합니다.
+단일 평가 프롬프트에서 필연적으로 발생하는 **온정주의(Politeness Bias)와 내부 타협(Compromise Bias)**, 그리고 **선형 가중합(Linear Weighted Sum)으로 인한 결함 물타기(Averaging Out) 착시**를 원천 차단하기 위해, **[Phase 1: 기소 단계 (검사/Red Teamer)]** ➔ **[Phase 2: 판결 단계 (판사/Meta-Judge)]** ➔ **[🚨 Knockout Red Flag Gatekeeper]**로 이어지는 3중 사법 아키텍처를 강제 집행합니다.
 
 ```
 [입력 5대 패킷: draft.txt + spec.json + context.json + 루브릭 헌법 + lint 리포트]
@@ -380,13 +394,27 @@ python3 scripts/lint.py <draft.txt> <spec.json>
 │ ⚖️ [Phase 2: 판결 단계] 메타 감사관 & 결정론적 판사 (Meta-Judge Engine)         │
 │ • 인용구 실존 감사 (Fuzzy Jaccard) ➔ 허위 기소 즉시 기각(Dismissal)          │
 │ • 시니어 억지 트집 기각 vs 실질 결함 유효 채택 (Fair Assessment)               │
-│ • 유효 결함당 헌법적 루브릭(1~5점) 결정론적 감점 선고 & 100점 환산 판결문 편철│
+│ • 유효 결함당 헌법적 루브릭(1~5점) 결정론적 감점 선고                          │
+└──────────────────────────────────────┬──────────────────────────────────────┘
+                                       │
+                                       ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ 🚨 [Knockout Red Flag 사법 게이트키퍼] (Knockout Protocol v3.2)             │
+│ • 3대 치명적 레드 플래그 중 유효 채택(SUSTAINED)이 1건이라도 존재하는가?     │
+│   ① Flag 1: 자아과잉 / 비현실적 레거시 코어 전면 계승 호언장담              │
+│   ② Flag 2: 서사 모순 & 오탈자 3건 이상 방치 (무결성 훼손)                   │
+│   ③ Flag 3: 무관한 프로젝트 조각모음 나열 (Type_C 독소 저촉)                 │
+│                                                                             │
+│   ➔ [결함 적발 시 (탈락본)]: 10개 축 선형 합산 전면 무효화 &                 │
+│      총점 Max 75.0점 강제 캡핑(Hard Clamp) ➔ DEFECT (불합격권) 선고         │
+│   ➔ [0건 무결점 (합격본)]: HR(40%) + Tech(60%) 정상 선형 랭킹 ➔ PASS 선고   │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
 - **동적 컨텍스트 바인딩 (Dynamic Context Binding - 하드코딩 영구 금지)**:
   채점관의 페르소나는 어떠한 경우에도 하드코딩되지 않으며, 오직 Step 0에서 생성된 `context.json`의 팩트(`{context.company}`, `{context.department}`, `{context.job_role}`, `{context.edge_cases}`)를 100% 동적으로 주입받아 검사 및 판사의 평가 기준을 구성합니다.
-- **점수 산출 권한 박탈**: 검사는 점수를 절대 매길 수 없으며, 판사(기계 엔진)만이 감사 통과된 결함에 대해 결정론적으로 점수를 차감 선고합니다.
+- **점수 산출 권한 박탈 및 결정론적 하드 클램프**:
+  검사는 점수를 절대 매길 수 없으며, 판사(기계 엔진)만이 감사 통과된 결함에 대해 감점을 집행합니다. 치명적 레드 플래그가 유효 채택된 경우 선형 가중합을 전면 폐기하고 총점을 Max 75점으로 강제 압축(Hard Clamp)하여 실제 채용 탈락을 재현합니다.
 
 #### 0. ⚡ 전 단계 E2E 동적 바인딩 종합 매트릭스 (E2E Dynamic Context Binding Matrix)
 Step 0의 단일 진실 공급원(SSOT: `context.json` & `spec.json`)은 입수·가공(Step 1~3)부터 사후 검증·원장 환류(Step 4~8)까지 전 과정을 100% 수직 관통합니다:

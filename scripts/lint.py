@@ -203,6 +203,26 @@ def check(qid, body, spec, banned, proper_nouns, blind_level="NONE"):
     if km:
         out['issues'].append(f"WARN 단순 키워드 나열 감지: '{km.group(0)}' — 쉼표 나열 대신 유기적 인과관계 서술 권장")
 
+    # 4. 치명적 오탈자 및 맞춤법 결함 검출 (Typo & Integrity Gate)
+    COMMON_TYPO_PATTERNS = [
+        (r'\b곳\b(?=\s*(?:고객|서버|데이터|자산))', '곳 ➔ 곧(부사) 오기'),
+        (r'끕어올려', '끕어올려 ➔ 끌어올려 오기'),
+        (r'가늘할', '가늘할 ➔ 가늠할 오기'),
+        (r'옷기던', '옷기던 ➔ 옮기던 오기'),
+        (r'옷겨본', '옷겨본 ➔ 옮겨본 오기'),
+        (r'끋까지', '끋까지 ➔ 끝까지 오기'),
+        (r'몯한', '몯한 ➔ 못한 오기')
+    ]
+    detected_typos = []
+    for pat, desc in COMMON_TYPO_PATTERNS:
+        if re.search(pat, body):
+            detected_typos.append(desc)
+    if detected_typos:
+        out['info']['오탈자검출'] = f"{len(detected_typos)}건: {', '.join(detected_typos)}"
+        for dt in detected_typos:
+            out['issues'].append(f"WARN 치명적 오탈자 검출: '{dt}' — 문맥상 명백한 오기로 서류 검수 무결성 훼손")
+
+
     # 문장 길이 분포 및 리듬 검사
     ss = sentences(body)
     if ss:
@@ -250,6 +270,8 @@ if __name__ == '__main__':
         sys.exit(1)
 
     fails = 0
+    total_typo_count = 0
+    results = []
     for qid, body in draft.items():
         q_spec = spec_questions.get(qid, {})
         # 전역 length_metric_type 상속
@@ -257,6 +279,15 @@ if __name__ == '__main__':
             q_spec['length_metric_type'] = spec['length_metric_type']
             
         r = check(qid, body, q_spec, banned, pn, blind_level=blind_level)
+        results.append(r)
+        if '오탈자검출' in r['info']:
+            count_str = r['info']['오탈자검출'].split('건')[0]
+            try:
+                total_typo_count += int(count_str)
+            except Exception:
+                pass
+
+    for r in results:
         print(f"\n{'='*52}\n[문항 {r['문항']}]")
         for k, v in r['info'].items():
             print(f'  {k}: {v}' if not isinstance(v, list) else f'  {k}:\n' + ''.join(f'    - {x}\n' for x in v).rstrip())
@@ -266,5 +297,10 @@ if __name__ == '__main__':
                 fails += i.startswith('FAIL')
         else:
             print('  지적 없음')
+
+    if total_typo_count >= 3:
+        print(f"\n🚨 CRITICAL FAIL [Knockout Red Flag]: 지원서 전체에서 치명적 오탈자가 {total_typo_count}건 누적되었습니다. (3건 이상 방치 시 Step 5 사법 심판에서 자동 탈락/Hard Clamp 대상이 되므로 전수 교정 필수)")
+        fails += 1
+
     print(f"\n{'='*52}\nFAIL {fails}건")
     sys.exit(1 if fails else 0)

@@ -173,6 +173,132 @@ def audit_axis_c_gating(tech_q, full_draft_text):
 
     return "✅ **PASSED**: 축 C 상용 프로덕션/신입 완수 책임/공인 피어 검증 감사 통과"
 
+# ==============================================================================
+# 🚨 Knockout Red Flag 사법 게이트키퍼 (Knockout Gatekeeper Protocol v3.2)
+# ==============================================================================
+KNOCKOUT_FLAG_PATTERNS = {
+    "FLAG_EGO": {
+        "name": "Flag 1: 자아과잉 / 비현실적 역할 인식",
+        "desc": "신입이 20~40년 된 레거시 HTS C++ 코어 렌더링이나 계정계 트랜잭션을 전면 계승/재작성하겠다고 호언장담",
+        "regex": re.compile(r'(40년간\s*축적된\s*코드를\s*.*안정적으로\s*계승|코어를\s*(?:재작성|재구축)|직접\s*계승|엔진을\s*다시\s*짜|원장을\s*전면\s*개편)', re.IGNORECASE),
+        "keywords": ["오만", "비현실적", "자아과잉", "호언장담", "단독 계승", "Dunning-Kruger"]
+    },
+    "FLAG_TYPO_CONTRADICTION": {
+        "name": "Flag 2: 서사 모순 & 오탈자 다수 방치",
+        "desc": "디테일 추구 및 도구적 사전 차단을 강조하면서 3건 이상의 치명적 오탈자 방치 (무결성 훼손)",
+        "typos": [
+            (r'\b곳\b(?=\s*(?:고객|서버|데이터))', '곳 (곧의 오기)'),
+            (r'끕어올려', '끕어올려 (끌어올려의 오기)'),
+            (r'가늘할', '가늘할 (가늠할의 오기)'),
+            (r'옷기던', '옷기던 (옮기던의 오기)'),
+            (r'옷겨본', '옷겨본 (옮겨본의 오기)')
+        ],
+        "keywords": ["오탈자", "맞춤법", "모순", "무결성 훼손", "자가당착"]
+    },
+    "FLAG_LAUNDRY_LIST": {
+        "name": "Flag 3: 무관한 프로젝트 조각모음 나열",
+        "desc": "단일 아키텍처 인과관계 없이 4~6개 이상의 별개 프로젝트를 1개 문항 안에 백화점식으로 나열하여 깊이 상실",
+        "keywords": ["조각모음", "백화점식", "나열", "파편화", "Laundry list", "독소 2"]
+    }
+}
+
+def audit_knockout_gatekeeper(tech_data, hr_data, full_draft_text, knockout_eval_path=None):
+    """
+    3대 치명적 레드 플래그(자아과잉, 오탈자/모순, 조각모음)를 사법 감사하여,
+    1건이라도 SUSTAINED(유효 채택) 시 선형 가중합을 무효화하고 총점을 Max 75점으로 강제 캡핑(Hard Clamp).
+    """
+    sustained_flags = []
+    dismissed_flags = []
+
+    # 1. 외부 사법 판결 JSON 파일이 제공된 경우 우선 반영
+    if knockout_eval_path and Path(knockout_eval_path).exists():
+        try:
+            ke_data = json.loads(Path(knockout_eval_path).read_text(encoding='utf-8'))
+            r_flags = ke_data.get("knockout_flags", {})
+            for flag_key, flag_info in r_flags.items():
+                status = flag_info.get("verdict", "").upper()
+                if "SUSTAINED" in status or flag_info.get("sustained") is True:
+                    sustained_flags.append({
+                        "key": flag_key,
+                        "name": flag_info.get("name", flag_key),
+                        "evidence": flag_info.get("evidence", "외부 사법 감사에서 유효 채택")
+                    })
+                else:
+                    dismissed_flags.append({
+                        "key": flag_key,
+                        "name": flag_info.get("name", flag_key),
+                        "reason": flag_info.get("evidence", "기각 판결")
+                    })
+            if sustained_flags or dismissed_flags:
+                return sustained_flags, dismissed_flags
+        except Exception:
+            pass
+
+    # 2. 내장 사법 엔진으로 3대 레드 플래그 정밀 감사
+    all_tech_critiques = " ".join([
+        q.get("critique", "") + " " + q.get("comment", "")
+        for q in tech_data.get("questions", {}).values()
+    ]) + " " + tech_data.get("overall_comment", "")
+
+    # --- Flag 1: 자아과잉 / 비현실적 역할 인식 ---
+    has_ego_regex = bool(KNOCKOUT_FLAG_PATTERNS["FLAG_EGO"]["regex"].search(full_draft_text))
+    has_ego_critique = any(kw in all_tech_critiques for kw in KNOCKOUT_FLAG_PATTERNS["FLAG_EGO"]["keywords"])
+    min_d_score = min([q.get("scores", {}).get("D", 5) for q in tech_data.get("questions", {}).values()] or [5])
+    if has_ego_regex or (has_ego_critique and min_d_score <= 3):
+        evidence = "40년 레거시 코어 전면 계승/재작성 호언장담 식별" if has_ego_regex else "신입 감당 불가 초고위험 코어 장담 적발"
+        sustained_flags.append({
+            "key": "FLAG_EGO",
+            "name": KNOCKOUT_FLAG_PATTERNS["FLAG_EGO"]["name"],
+            "evidence": evidence
+        })
+    else:
+        dismissed_flags.append({
+            "key": "FLAG_EGO",
+            "name": KNOCKOUT_FLAG_PATTERNS["FLAG_EGO"]["name"],
+            "reason": "신입 역할 인식 및 현실적 온보딩 자세 유지 확인"
+        })
+
+    # --- Flag 2: 서사 모순 & 오탈자 다수 방치 ---
+    detected_typos = []
+    for pat, desc in KNOCKOUT_FLAG_PATTERNS["FLAG_TYPO_CONTRADICTION"]["typos"]:
+        if re.search(pat, full_draft_text):
+            detected_typos.append(desc)
+    has_typo_critique = any(kw in all_tech_critiques for kw in KNOCKOUT_FLAG_PATTERNS["FLAG_TYPO_CONTRADICTION"]["keywords"])
+    min_j_score = min([q.get("scores", {}).get("J", 5) for q in tech_data.get("questions", {}).values()] or [5])
+    if len(detected_typos) >= 3 or (has_typo_critique and min_j_score <= 3):
+        evidence = f"치명적 오탈자 {len(detected_typos)}건 실존 검출: {', '.join(detected_typos)}" if detected_typos else "도구주의 강조 대비 오탈자 방치 모순"
+        sustained_flags.append({
+            "key": "FLAG_TYPO_CONTRADICTION",
+            "name": KNOCKOUT_FLAG_PATTERNS["FLAG_TYPO_CONTRADICTION"]["name"],
+            "evidence": evidence
+        })
+    else:
+        dismissed_flags.append({
+            "key": "FLAG_TYPO_CONTRADICTION",
+            "name": KNOCKOUT_FLAG_PATTERNS["FLAG_TYPO_CONTRADICTION"]["name"],
+            "reason": "오탈자 3건 미만 및 서사 일관성 유지 확인"
+        })
+
+    # --- Flag 3: 무관한 프로젝트 조각모음 나열 (Type_C 독소) ---
+    has_laundry_critique = any(kw in all_tech_critiques for kw in KNOCKOUT_FLAG_PATTERNS["FLAG_LAUNDRY_LIST"]["keywords"])
+    min_b_score = min([q.get("scores", {}).get("B", 5) for q in tech_data.get("questions", {}).values()] or [5])
+    # 본문 내 다중 프로젝트(MFC, MobileNet, SSL Pinning, 캠핑카, 분산) 동시 출현 검사
+    multi_project_hits = [p for p in ['MFC', 'MobileNet', 'SSL Pinning', '캠핑카', '분산 클러스터'] if p in full_draft_text]
+    if (has_laundry_critique and min_b_score <= 3) or len(multi_project_hits) >= 4:
+        sustained_flags.append({
+            "key": "FLAG_LAUNDRY_LIST",
+            "name": KNOCKOUT_FLAG_PATTERNS["FLAG_LAUNDRY_LIST"]["name"],
+            "evidence": f"단일 문항 내 {len(multi_project_hits)}개 무관 프로젝트 조각모음 나열 (Type_C 독소조항 저촉)"
+        })
+    else:
+        dismissed_flags.append({
+            "key": "FLAG_LAUNDRY_LIST",
+            "name": KNOCKOUT_FLAG_PATTERNS["FLAG_LAUNDRY_LIST"]["name"],
+            "reason": "단일 프로젝트 아키텍처 집중 및 심층 디버깅 인과관계 확인"
+        })
+
+    return sustained_flags, dismissed_flags
+
 def main():
     parser = argparse.ArgumentParser(description="자소서 2인 독립 검증 사후 집계기 (grade.py v2.2)")
     parser.add_argument("draft", help="초안 텍스트 파일 경로 (===1=== 구분자)")
@@ -181,6 +307,8 @@ def main():
     parser.add_argument("--hr-weight", type=float, default=0.4, help="HR 가중치 (기본값: 0.4)")
     parser.add_argument("--tech-weight", type=float, default=0.6, help="테크 리드 가중치 (기본값: 0.6)")
     parser.add_argument("--spec", help="공고 명세 spec.json 경로 (옵션)")
+    parser.add_argument("--knockout-eval", help="Knockout 사법 심판 JSON 파일 경로 (옵션)")
+    parser.add_argument("--knockout-threshold", type=float, default=75.0, help="Knockout 발동 시 최대 상한 점수 (기본값: 75.0)")
     parser.add_argument("--out", help="출력 마크다운 리포트 파일 경로 (옵션)")
     args = parser.parse_args()
 
@@ -273,23 +401,63 @@ def main():
 
     avg_hr = sum(total_hr_scores) / len(total_hr_scores) if total_hr_scores else 0
     avg_tech = sum(total_tech_scores) / len(total_tech_scores) if total_tech_scores else 0
-    avg_final = sum(total_final_scores) / len(total_final_scores) if total_final_scores else 0
+    raw_avg_final = sum(total_final_scores) / len(total_final_scores) if total_final_scores else 0
+
+    # 🚨 Knockout Red Flag 사법 감사 집행
+    sustained_flags, dismissed_flags = audit_knockout_gatekeeper(tech_data, hr_data, full_draft_text, args.knockout_eval)
+    
+    is_knockout = len(sustained_flags) > 0
+    if is_knockout:
+        # 1건 채택 시 Max 75, 2건 채택 시 Max 73, 3건 채택 시 Max 70
+        base_clamp = 75.0 if len(sustained_flags) == 1 else (73.0 if len(sustained_flags) == 2 else 70.0)
+        clamp_limit = min(base_clamp, args.knockout_threshold)
+        final_clamped_score = min(clamp_limit, raw_avg_final)
+        final_verdict = "DEFECT (불합격권 선고)"
+    else:
+        clamp_limit = 100.0
+        final_clamped_score = raw_avg_final
+        final_verdict = "PASS (합격권)" if final_clamped_score >= 90.0 else "REVIEW (보완 필요)"
 
     report.append("## 1. 종합 점수 요약\n")
+    if is_knockout:
+        report.append(f"> 🚨 **[Knockout Red Flag 사법 게이트키퍼 발동: {final_verdict}]**")
+        report.append(f"> 치명적 레드 플래그 {len(sustained_flags)}건 유효 채택으로 인해, 선형 가중합({raw_avg_final:.1f}점)이 원천 무효화되고 **최종 {final_clamped_score:.1f}점 (Max {clamp_limit:.1f}점 Hard Clamped)**으로 강제 캡핑되었습니다.\n")
+
     report.append("| 문항 | HR 점수 (40%) | 테크 리드 점수 (60%) | 가중 종합 점수 |")
     report.append("| :--- | :---: | :---: | :---: |")
     for r in table_rows:
         report.append(r)
-    report.append(f"| **전체 평균** | **{avg_hr:.1f}점** | **{avg_tech:.1f}점** | **{avg_final:.1f}점** |\n")
+    report.append(f"| **원시 선형 평균** | **{avg_hr:.1f}점** | **{avg_tech:.1f}점** | **{raw_avg_final:.1f}점** |")
+    if is_knockout:
+        report.append(f"| **최종 사법 판결 점수** | - | - | **{final_clamped_score:.1f}점 ({final_verdict})** |\n")
+    else:
+        report.append(f"| **최종 확정 판결 점수** | **{avg_hr:.1f}점** | **{avg_tech:.1f}점** | **{final_clamped_score:.1f}점 ({final_verdict})** |\n")
 
-    # 2. Typed Locked Rubric Gating 기계 감사 로그
-    report.append("## 2. Typed Locked Rubric 기계 감사 로그 (Anti-Sycophancy)\n")
+    # 2. 🚨 Knockout Red Flag 사법 심판 로그
+    report.append("## 2. 🚨 Knockout Red Flag 사법 심판 내역 (Knockout Protocol v3.2)\n")
+    if sustained_flags:
+        report.append("### 🛑 [유효 채택된 치명적 결함 (Sustained Red Flags)]")
+        for sf in sustained_flags:
+            report.append(f"- 🚨 **[{sf['name']}]**: {sf['evidence']}")
+        report.append(f"\n➔ **사법 조치**: 선형 합산 전면 무효화 및 Max {clamp_limit:.1f}점 강제 캡핑(Hard Clamp) 집행\n")
+    else:
+        report.append("### ✅ [Knockout Red Flag 심판 결과: ALL CLEAR]")
+        report.append("- 3대 치명적 레드 플래그(자아과잉, 오탈자/모순, 조각모음) 전건 무결함 확인 (하드 클램프 미발동)\n")
+        
+    if dismissed_flags:
+        report.append("### ⚖️ [기각된 혐의 (Dismissed Flags)]")
+        for df in dismissed_flags:
+            report.append(f"- ℹ️ **[{df['name']}]**: {df['reason']}")
+        report.append("")
+
+    # 3. Typed Locked Rubric Gating 기계 감사 로그
+    report.append("## 3. Typed Locked Rubric 기계 감사 로그 (Anti-Sycophancy)\n")
     for log in type_audit_logs:
         report.append(log)
     report.append("")
 
-    # 3. 감점 인용구 무결성 검증 (Word Bi-gram & Fuzzy Jaccard)
-    report.append("## 3. 감점 인용구 무결성 감사 (Word Bi-gram & Fuzzy Jaccard)\n")
+    # 4. 감점 인용구 무결성 검증 (Word Bi-gram & Fuzzy Jaccard)
+    report.append("## 4. 감점 인용구 무결성 감사 (Word Bi-gram & Fuzzy Jaccard)\n")
     hallucinated = 0
     for v in all_verified_quotes:
         if v["valid"]:
@@ -305,17 +473,17 @@ def main():
     else:
         report.append(f"\n⚠️ 환각 인용 {hallucinated}건 감지됨. 해당 감점 사유는 전면 무효화 및 점수 롤백 처리되었습니다.\n")
 
-    # 4. 점수 롤백 감사 로그
+    # 5. 점수 롤백 감사 로그
     if rollback_logs:
-        report.append("## 4. 환각 인용 감점 무효화 및 점수 롤백 내역 (Score Rollback)\n")
+        report.append("## 5. 환각 인용 감점 무효화 및 점수 롤백 내역 (Score Rollback)\n")
         for rlog in rollback_logs:
             report.append(rlog)
         report.append("")
 
-    # 5. 실전 면접 킬러 꼬리질문 및 방어 전략
+    # 6. 실전 면접 킬러 꼬리질문 및 방어 전략
     killer_questions = tech_data.get("killer_followup_questions", []) or tech_data.get("killer_questions", [])
     if killer_questions:
-        report.append("## 5. 현업 테크 리드의 실전 기술면접 킬러 꼬리질문 (Killer Questions)\n")
+        report.append("## 6. 현업 테크 리드의 실전 기술면접 킬러 꼬리질문 (Killer Questions)\n")
         for idx, kq in enumerate(killer_questions, 1):
             q_text = kq.get('question', '')
             intent = kq.get('intent', '')
@@ -327,8 +495,8 @@ def main():
                 report.append(f"- **추천 방어 전략**: {defense}")
             report.append("")
 
-    # 6. 문항별 세부 평가 리포트
-    report.append("## 6. 문항별 상세 평가 내역\n")
+    # 7. 문항별 세부 평가 리포트
+    report.append("## 7. 문항별 상세 평가 내역\n")
     for qid in q_ids:
         report.append(f"### [문항 {qid}]")
         hr_q = hr_data.get("questions", {}).get(qid, {})
@@ -345,8 +513,11 @@ def main():
         report.append(f"- 세부 점수: B({tech_q.get('scores',{}).get('B','-')}) C({tech_q.get('scores',{}).get('C','-')}) D({tech_q.get('scores',{}).get('D','-')}) H({tech_q.get('scores',{}).get('H','-')}) J({tech_q.get('scores',{}).get('J','-')}) / 25점 만점")
         report.append(f"- 핵심 소견: {tech_comment}\n")
 
-    # 7. 종합 총평
-    report.append("## 7. 평가위원 종합 총평\n")
+    # 8. 종합 총평
+    report.append("## 8. 평가위원 종합 총평\n")
+    if is_knockout:
+        report.append("### 🛑 [사법 감사 패널 최종 판결문]\n")
+        report.append(f"본 지원서는 우수한 공학적 소재에도 불구하고, **치명적 결함 {len(sustained_flags)}건({', '.join(sf['name'].split(':')[0] for sf in sustained_flags)})**이 유효 채택되어 현업 채용 관문을 통과할 수 없습니다. 온정주의적 찬사는 전면 배제되며, 결함 제거 및 서사 재정렬 없이는 실전 면접 진입 시 치명적 공격을 방어할 수 없습니다.\n")
     if hr_data.get("overall_comment"):
         report.append(f"### 🧑‍💼 HR 인사담당자 총평\n{hr_data['overall_comment']}\n")
     if tech_data.get("overall_comment"):
