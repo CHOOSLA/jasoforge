@@ -73,6 +73,10 @@ REQUIRED_INVARIANTS = [
     ("스마트 입력 감지 관문", "Smart Ingestion Gateway"),
     ("노션 원장 선행 조회", "Asset Lookup-First"),
     ("Audit-First 직행 플로우", "Audit-First"),
+
+    # 9. Prosecutor-Judge Architecture & Dynamic Context Binding
+    ("2단계 검사-판사 아키텍처", "Prosecutor-Judge Architecture"),
+    ("동적 컨텍스트 바인딩", "동적 컨텍스트 바인딩"),
 ]
 
 def verify_file(skill_path: Path) -> bool:

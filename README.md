@@ -134,7 +134,7 @@ python3 scripts/lint.py draft.txt spec.json
 ```
 *글자수 도달율, 작성방법 키워드 충족도, 블라인드 위반 여부, 문장 리듬 검사.*
 
-### 2. 컨텍스트 격리 독립 블라인드 채점 (Dual-Track Grade)
+### 2. 2단계 검사-판사 독립 채점 (Prosecutor-Judge Architecture)
 ```bash
 python3 scripts/grade.py draft.txt \
   --spec spec.json \
@@ -142,7 +142,8 @@ python3 scripts/grade.py draft.txt \
   --rubric references/rubric_tech.json \
   --output report.json
 ```
-*인사 및 현업 테크 리드 독립 평가, 감점 요인 및 본문 인용문 추출, 킬러 면접 꼬리질문 및 방어 논리 도출.*
+*Phase 1(기소): 점수 권한이 박탈된 2대 레드팀 검사가 'So What?' 3단계 추궁 및 흠집 공격.*
+*Phase 2(판결): 판사 엔진이 인용구 감사(Fuzzy Jaccard) 후 억지 트집 기각 및 결정론적 감점 선고.*
 
 ### 3. 엔드투엔드 파이프라인 통합 실행
 ```bash
