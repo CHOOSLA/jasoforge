@@ -259,6 +259,21 @@ def audit_evidence_contracts(tech_q, full_draft_text, q_draft_text, context_data
                     tech_q["scores"]["D"] = 3
                     logs.append(f"⚠️ **[도메인 정체성 괴리]** 시스템/인프라 직무({job_role})임에도 웹 프론트엔드 UI/컴포넌트 조작({', '.join(list(set(fe_hits))[:3])}) 서술 치중으로 D축 점수가 3점으로 제한되었습니다.")
 
+    # 4. key_responsibilities_audit: 공고 담당업무 우선순위(Key Responsibilities) 정합도
+    resp_audit = evidence_contracts.get("key_responsibilities_audit")
+    if resp_audit and isinstance(resp_audit, dict):
+        focus_level = resp_audit.get("focus_level", "CORE")  # CORE (1~2순위), SUPPORT (3순위 이하 부수 업무), NONE
+        resp_quote = resp_audit.get("evidence_quote", "")
+        resp_valid = verify_quote_fuzzy(resp_quote, full_draft_text) if resp_quote else False
+
+        if focus_level in ["SUPPORT", "PERIPHERAL"]:
+            cur_d = tech_q.get("scores", {}).get("D", 5)
+            if cur_d > 3:
+                tech_q["scores"]["D"] = 3
+                logs.append("⚠️ **[담당업무 우선순위 괴리 (Max 3점 캡핑)]** 공고의 1~2순위 핵심 코어 업무(Core Mission)를 외면하고 3순위 이하 부수적/지원 업무에 치중한 서술이 확인되어 D축 점수가 3점으로 제한 집행되었습니다.")
+        elif focus_level == "CORE" and resp_valid:
+            logs.append("✅ **[담당업무 우선순위 정합 통과]** 공고의 최우선 핵심 업무(Top 1~2순위 Core Mission)를 직격하는 엔지니어링 서사가 입증되었습니다.")
+
     if logs:
         return "\n  ".join(logs)
     return None

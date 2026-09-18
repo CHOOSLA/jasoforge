@@ -96,7 +96,7 @@ flowchart TD
 
     %% Step 0: 공고 수집, 3계층 딥리서치 & 최적 직무 매칭
     subgraph S0 ["Step 0. 선행 탐색 & 조직 이원화 딥리서치 (선행 탐색)"]
-        A1["채용 공고 수집<br/>(공식 ATS + 공고문 파싱)"] --> A2["전 직무 요건 분해<br/>(담당업무 · 필수자격 · 우대사항 · 기술스택)"]
+        A1["채용 공고 수집<br/>(공식 ATS + 공고문 파싱)"] --> A2["전 직무 요건 분해<br/>• 담당업무 (우선순위 내림차순 매핑)<br/>• 필수자격 · 우대사항 · 기술스택"]
         A3_ORG["조직 정체성 이원화 계약 (Dual-Layer Contract)<br/>• 채용 모회사(Parent Entity) ↔ 담당 서비스(Client Domain) 분리"]
         A3["3계층 기업 딥리서치<br/>• 전사 영역 (비전·시장·BM·투자방향)<br/>• 사업부 영역 (솔루션·고객사·당면과제)<br/>• 직무 영역 (아키텍처·스택·엣지케이스)"]
         A2 --> A3_ORG --> A3
@@ -457,9 +457,9 @@ Step 0의 단일 진실 공급원(SSOT: `context.json` & `spec.json`)은 입수�
 | :--- | :--- | :--- | :--- |
 | **Step 1 (공고 세팅)** | `{spec.deadline}`, `{spec.application_url}`, `{context.recruitment_track_type}` | • `🏢 회사별 지원 현황`<br>• `📄 지원서 아카이브` v1 | 캘린더 마감 알림 활성화, 공식 ATS 즉시 점프 링크 확보, 복수 트랙 분리로 **미아 지원서 발생 원천 차단** |
 | **Step 2 (소재 매칭)** | `{context.target_role_domain_nature}`, `{context.company_core_values}` | • 문항 의도 분석(I축)<br>• 경험 아카이브 1차 하드 필터링<br>• 장면 4요소 표 작성 | 현대차(무결점/안전)에 규정 우회 소재 차단, R&D에 단순 CRUD 게시판 소재 차단 ➔ **소재 선정 GIGO 원천 봉쇄** |
-| **Step 3 (초안 작성)** | `{context.company}`, `{context.department}`, `{context.domain_tone_directive}`, `{context.domain_core_invariants}` | • 직무별 문체 헌법 프롬프트<br>• Engineering Narrative v7.0 작성기 | R&D 가설검증/Ablation Study 톤, 금융 99.999% 무중단 트랜잭션 톤, 모빌리티 Fail-Safe 톤 주입 ➔ **깡통 CS 자소서 박멸** |
+| **Step 3 (초안 작성)** | `{context.company}`, `{context.department}`, `{context.key_responsibilities[0]}`, `{context.domain_tone_directive}`, `{context.domain_core_invariants}` | • 직무별 문체 헌법 프롬프트<br>• Engineering Narrative v7.0 작성기<br>• 1순위 핵심 담당업무 타깃 장면 우선 배치 | R&D 가설검증/Ablation Study 톤, 금융 99.999% 무중단 트랜잭션 톤, 모빌리티 Fail-Safe 톤 주입 ➔ **깡통 CS 자소서 박멸** |
 | **Step 4 (기계 린트)** | `{spec.max_chars}`, `{spec.length_metric_type}`, `{spec.blind_compliance_level}` | • `lint.py` 글자수/바이트 계량기<br>• 블라인드 금지어 검사기 | 삼성/현대차 Byte ATS 불일치로 인한 **마감 직전 200% 초과 접수 폭파 방지**, 공기업 블라인드 즉각 실격 방지, R&D 학술 성과 오작동 방지 |
-| **Step 5 (검사-판사)** | `{context.recruitment_archetype}`, `{context.required_hard_skills}`, `{context.domain_core_invariants}`, 5대 서사유형 | • `rubric_tech.json` & `rubric_hr.json`<br>• D축 아키타입 게이팅(제조업 필수스택 미경험 Max 2점)<br>• G축 대형 지면 75% 성실도 게이팅(Max 3점) | 온정주의 평점 인플레이션 박멸, **제조업 SM/SI 즉시 전력감 스택 미경험 탈락본 필터링**, 75% 미달 여백 방치 감점 집행 |
+| **Step 5 (검사-판사)** | `{context.recruitment_archetype}`, `{context.key_responsibilities}`, `{context.required_hard_skills}`, `{context.domain_core_invariants}`, 5대 서사유형 | • `rubric_tech.json` & `rubric_hr.json`<br>• D축 담당업무 우선순위 정합도(3순위 이하 곁다리 업무 치중 시 Max 3점)<br>• D축 아키타입 게이팅(제조업 필수스택 미경험 Max 2점)<br>• G축 대형 지면 75% 성실도 게이팅(Max 3점) | 온정주의 평점 인플레이션 박멸, **제조업 SM/SI 즉시 전력감 스택 미경험 탈락본 필터링**, 75% 미달 여백 방치 감점 집행 |
 | **Step 6, 7, 8 (원장/로그)** | `{context.application_unique_key}`, 복원된 비선형 서사 (`{fact_provenance}`) | • `score_ledger.json` / `📊 채점 기록 DB`<br>• `🗂️ 경험 인덱스 DB` (Flywheel)<br>• `revision_log.json` | 복합키(`{season}_{company}_{track}_{role}`)로 원장 충돌 방지, 복원된 팩트의 Append-Only 누적으로 **차기 지원서의 영구적 Ground Truth 자산화** |
 
 #### 0-1. 🏛️ 런타임 데이터 계약 표준 (Runtime_Data_Contract_Standards)
@@ -487,7 +487,7 @@ Step 0의 단일 진실 공급원(SSOT: `context.json` & `spec.json`)은 입수�
 | **A** | 상황 설명 비중 | 첫 문단/배경 설명이 전체 분량의 20~30%를 초과하거나 나열식 기능 설명이 장황할 경우 감점 (단, 지원동기/인성/가치관 문항은 45%까지 탄력 허용, 500자 이하 면제) |
 | **B** | 판단 근거 & Why 의식 | 합리적 판단 이유(Why) 결여 시 감점.<br>• **직교적 서사 평가 매트릭스(Orthogonal_Narrative_Matrix)** 적용.<br>• 결단 기제(트레이드오프/원인규명/시스템조망) 및 필수 관찰 증거 미확인 시 Max 3점 강제 캡핑.<br>• *(단, 지원동기/가치관/포부 등 비기술 문항은 '기술적 대안 1건' 조건 자동 면제 - EXEMPT)* |
 | **C** | 완수 과정 & 리스크 책임 | **상용 프로덕션 및 신입 엔지니어링 5대 완수 앵커**:<br>• 상용 프로덕션 환경에서의 2차 부작용 선제 방어 시 5점.<br>• **신입 엔지니어링 현실적 5대 완수 경로**(① 수십 명 이상 실사용자 배포 & 핫픽스 루프, ② 극한의 가용 자원 제약 환경 극복, ③ 가상 부하 및 벤치마크 스트레스 테스트로 병목 타파, ④ 커스텀 Linter/CI 시스템적 강제 도구화, ⑤ 데이터 및 상태 불일치 무결성 선제 방어) 또는 **독립적인 제3자 객관 피어 검증(Third_Party_Peer_Verification 4대 범주: ① Star 100+ 오픈소스 공식 업스트림 머지 PR, ② KCI/SCI급 학술 논문 등재, ③ 공인 벤치마크 SOTA 정량 수치, ④ 실전 SLA/유료 고객 지표)** 통과 실적 5점 만점 인정.<br>• 실패해도 손해 없는 통제된 단순 과제/수업 프로젝트라도 localhost 안주, 예외 처리 없는 튜토리얼 복붙 Happy Path 편향, 원인 규명 없는 우회 땜질(서버 재부팅 등), 측정 없는 뇌피셜 수치로 포장한 경우에만 3점 제한. |
-| **D** | 부서 엣지 케이스 & 도메인 핵심 불변식 | **도메인 핵심 불변식(Core Invariant) & 신입 역할 현실성**:<br>• 지원 부서의 핵심 불변식({context.domain_core_invariants})과 신입의 현실적 기여 계획 제시 시 5점 만점 (학술 전문 용어가 없더라도 해당 기술 도메인의 실질적 현상-원인-방어 조치 서사 실재 시 인정).<br>• 단순 키워드 매칭에 머무르거나 비현실적인 코어 전면 재작성 포부는 엄격 감점 (3점 이하).<br>• 공고상 필수 스택({context.required_hard_skills}) 미경험 자백 및 극복 팩트 부재 시 Max 2점 클램핑 (실제 구현/배포 극복 서사 실재 시 면제). |
+| **D** | 부서 엣지 케이스 & 도메인 핵심 불변식 | **최우선 담당업무(Top Responsibilities) & 핵심 불변식(Core Invariant)**:<br>• 공고의 최우선 담당업무({context.key_responsibilities}) 및 부서 핵심 불변식({context.domain_core_invariants})과 신입의 현실적 기여 계획 제시 시 5점 만점 (학술 전문 용어가 없더라도 실질적 현상-원인-방어 조치 서사 실재 시 인정).<br>• 1순위 핵심 업무를 외면하고 3순위 이하 부수 업무에만 치중하거나, 비현실적인 코어 전면 재작성 포부는 엄격 감점 (Max 3점 캡핑).<br>• 공고상 필수 스택({context.required_hard_skills}) 미경험 자백 및 극복 팩트 부재 시 Max 2점 클램핑 (실제 구현/배포 극복 서사 실재 시 면제). |
 | **E** | 질문 본질 의도 & 플로우 일치 | 질문이 묻는 본질적 평가 의도를 관통하지 못하거나 지시문의 서술 순서·논리 플로우를 이탈하면 감점 |
 | **F** | 작성방법 항목 전수 충족 | 문항 지시문에서 요구한 항목(행동, 결과물, 노력, 합의, 영향 등) 중 하나라도 빠지면 감점 |
 | **G** | 글자수 규격 준수 | 지정된 글자수/바이트 범위({spec.length_metric_type}, **상한 대비 80% 하드 하한선**).<br>• **고밀도 압축 서술 구제**: 80~84% 구간이라도 군더더기 없는 고밀도 완결 서술 시 5점 만점 인정.<br>• **규격 선행 확정(Spec Resolution)**: 상한 미지정 초안 유입 시 에이전트가 문항별 상한 글자수를 선행 질문(`ask_question`)하여 확정. 날림 5점 만점 부여 절대 금지.<br>• **자유 양식 대응**: 완전 자유 양식일 경우 업계 표준(700~800자) 기준 적용 또는 G축 N/A(가중치 제외) 처리로 점수 인플레이션 원천 차단. |

@@ -136,6 +136,11 @@ REQUIRED_INVARIANTS = [
     ("채용 검색을 통한 관계 규명", "채용 검색을 통한 관계 규명"),
     ("대화형 1회 확인 프로토콜", "대화형 1회 확인 프로토콜"),
     ("조직 정체성 실전 면접 가이드", "조직 정체성 실전 면접 가이드"),
+
+    # 17. Key Responsibilities Prioritization & D-Axis Core Gating (v3.6.0)
+    ("담당업무 우선순위 계약", "key_responsibilities"),
+    ("1순위 핵심 업무 직격 시 5점 만점", "최우선 담당업무"),
+    ("3순위 이하 부수 업무 치중 시 Max 3점 캡핑", "3순위 이하"),
 ]
 
 def verify_file(skill_path: Path) -> bool:

@@ -57,6 +57,10 @@
 - `department` (String): 지원 대상 부서 및 조직명
 - `job_role` (String): 채용 직무명
 - `deadline` (String): 지원 마감일자 (YYYY-MM-DD)
+- `key_responsibilities` (List[String]): **공고문 원문의 담당업무 목록 (위에서부터 내림차순 중요도 우선순위 반영)**
+  - `[0]`: 1순위 핵심 업무 (Core Mission - 해당 부서의 존재 이유이자 타협 불가능한 최우선 과업)
+  - `[1]`: 2순위 핵심 업무 (핵심 연계, 서브 시스템, 플랫폼 확장 과업)
+  - `[2~]`: 3순위 이하 부수적/지원 업무 (사내 툴 개선, 모니터링, 일반 유지보수 등)
 - `recruitment_archetype` (Enum): **4대 채용 아키타입 분기 기준**
   - `TECH_PURE`: 빅테크, SaaS, 순수 IT 서비스. CS Fundamental 및 학습 민첩성(Fast Learner) 우선. 스택 미경험 자백을 독해력/학습력으로 치환 시 방어 논리로 수용.
   - `MANUFACTURING_OPS`: 제조업 공장 IT, 온프레미스 설비 SM/SI. **즉시 전력감(Off-the-shelf Utility) 절대 우선**. 필수 코어 스택(C#, .NET, Java, DB/SQL 등) 미경험 자백 시 D축 치명적 감점(Max 2점 하드 캡핑). 시스템 엔지니어 공고에 웹 프론트엔드 조작 위장 시 D축 Max 3점 캡핑.
