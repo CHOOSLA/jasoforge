@@ -119,6 +119,15 @@ REQUIRED_INVARIANTS = [
     ("금융 증권 트랜잭션 멱등성 우선", "FINTECH_CORE"),
     ("필수 스택 미경험 자백 D축 클램핑", "D축 점수를"),
     ("대형 지면 성실도 게이팅 G축 75% 룰", "대형 지면 성실도 게이팅"),
+
+    # 15. Semantic Evidence-Contract Architecture (v3.4.0)
+    ("의미론적 증거 계약 아키텍처", "Semantic Evidence-Contract Architecture"),
+    ("어휘 경직성 및 단어 정규식 한계 극복", "어휘 경직성 및 단어 정규식의 한계 극복"),
+    ("문장 단위 3대 조작적 정의", "문장 단위 3대 조작적 정의"),
+    ("동일 요청 중복 인입 방어", "동일 요청 중복 인입 방어"),
+    ("극복 서사 구제 세이프 하버", "Overcoming Narrative Safe Harbor"),
+    ("구조화된 증거 계약 evidence_contracts", "evidence_contracts"),
+    ("런타임 시맨틱 증거 계약 표준", "Semantic_Evidence_Contract"),
 ]
 
 def verify_file(skill_path: Path) -> bool:

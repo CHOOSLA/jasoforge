@@ -191,9 +191,80 @@ SYSTEM_ROLE_PATTERN = re.compile(
     re.IGNORECASE
 )
 
+def audit_evidence_contracts(tech_q, full_draft_text, q_draft_text, context_data, spec_data, qid):
+    """
+    의미론적 증거 계약(Semantic Evidence-Contract Architecture v3.4) 감사 엔진:
+    1. LLM 평가관이 문맥/시제/의미론적 인과관계를 해석하여 작성한 evidence_contracts 검증.
+    2. Python 감사 엔진은 제출된 인용구의 무결성(Word Bi-gram + Fuzzy Jaccard)을 검증하고 결정론적 캡핑을 집행.
+    3. evidence_contracts 객체 부재 시 기존 정규식 기반 audit_domain_archetype_gating()으로 안전하게 폴백.
+    """
+    evidence_contracts = tech_q.get("evidence_contracts")
+    if not evidence_contracts or not isinstance(evidence_contracts, dict):
+        return audit_domain_archetype_gating(tech_q, q_draft_text, context_data, spec_data, qid)
+
+    logs = []
+    archetype = context_data.get("recruitment_archetype")
+    score_d = tech_q.get("scores", {}).get("D", 5)
+
+    # 1. archetype_audit: 스택 미경험 자백 및 실제 극복 팩트 검증
+    arch_audit = evidence_contracts.get("archetype_audit")
+    if arch_audit and isinstance(arch_audit, dict):
+        has_confession = arch_audit.get("has_confession", False)
+        confession_quote = arch_audit.get("confession_quote", "")
+        has_overcoming = arch_audit.get("has_overcoming_fact", False)
+        overcoming_quote = arch_audit.get("overcoming_quote", "")
+
+        confession_valid = verify_quote_fuzzy(confession_quote, full_draft_text) if confession_quote else False
+        overcoming_valid = verify_quote_fuzzy(overcoming_quote, full_draft_text) if overcoming_quote else False
+
+        if archetype == "MANUFACTURING_OPS":
+            if has_confession and confession_valid:
+                if has_overcoming and overcoming_valid:
+                    logs.append("✅ **[서류 스크리닝 통과]** 필수 스택 미경험 자백이 식별되었으나 실제 구현 및 배포 극복 팩트가 입증되어 결격 조항에서 제외되었습니다.")
+                else:
+                    cur_d = tech_q.get("scores", {}).get("D", 5)
+                    if cur_d > 2:
+                        tech_q["scores"]["D"] = 2
+                        logs.append("⚠️ **[서류 결격 스크리닝 (MANUFACTURING_OPS)]** 즉시 전력감이 요구되는 제조 현장 IT에서 필수 코어 스택 미경험 자백 확인 및 극복 팩트 부재로 D축 점수가 2점으로 제한 집행되었습니다.")
+            elif has_confession and not confession_valid:
+                logs.append("ℹ️ **[인용구 무효]** 필수 스택 미경험 자백 인용구가 본문과 불일치하여 자백 감점이 무효화되었습니다.")
+
+    # 2. core_invariant_audit: 도메인 불변식 조작적 정의 검증
+    inv_audit = evidence_contracts.get("core_invariant_audit")
+    if inv_audit and isinstance(inv_audit, dict):
+        addressed = inv_audit.get("addressed", False)
+        inv_quote = inv_audit.get("evidence_quote", "")
+        inv_type = inv_audit.get("invariant_type", "도메인 불변식")
+        inv_valid = verify_quote_fuzzy(inv_quote, full_draft_text) if inv_quote else False
+
+        if addressed and inv_valid:
+            logs.append(f"✅ **[도메인 불변식 검증 통과]** 전문 용어 부재 여부와 무관하게 문장 단위 조작적 정의({inv_type}) 및 실질적 조치 팩트가 확인되었습니다.")
+        elif not addressed:
+            cur_d = tech_q.get("scores", {}).get("D", 5)
+            if archetype in ["FINTECH_CORE", "MANUFACTURING_OPS"] and cur_d > 3:
+                tech_q["scores"]["D"] = 3
+                logs.append(f"ℹ️ **[도메인 불변식 미흡]** 핵심 도메인 불변식(중복 방어/동시성/장애 복구)에 대한 문장 단위 조작적 정의 부재로 D축 점수가 3점(상한)으로 조정되었습니다.")
+
+    # 3. 도메인 정체성 괴리 (시스템/인프라 vs 웹 프론트엔드 DOM/컴포넌트)
+    job_role = context_data.get("job_role", "") or spec_data.get("role", "")
+    is_system_role = bool(SYSTEM_ROLE_PATTERN.search(job_role))
+    if is_system_role:
+        fe_hits = WEB_FRONTEND_EXCLUSIVE_PATTERN.findall(q_draft_text)
+        if len(set(fe_hits)) >= 3:
+            sys_db_hits = re.findall(r'(DB|SQL|인프라|서버|소켓|네이티브|커널|프로세스|스레드|MES|센서)', q_draft_text, re.IGNORECASE)
+            if len(sys_db_hits) <= 1:
+                cur_d = tech_q.get("scores", {}).get("D", 5)
+                if cur_d > 3:
+                    tech_q["scores"]["D"] = 3
+                    logs.append(f"⚠️ **[도메인 정체성 괴리]** 시스템/인프라 직무({job_role})임에도 웹 프론트엔드 UI/컴포넌트 조작({', '.join(list(set(fe_hits))[:3])}) 서술 치중으로 D축 점수가 3점으로 제한되었습니다.")
+
+    if logs:
+        return "\n  ".join(logs)
+    return None
+
 def audit_domain_archetype_gating(tech_q, draft_q_text, context_data, spec_data, qid):
     """
-    4대 채용 아키타입(recruitment_archetype) 및 도메인 정합도 기계 감사:
+    4대 채용 아키타입(recruitment_archetype) 및 도메인 정합도 기계 감사 (Regex Fallback):
     1. MANUFACTURING_OPS (제조업 공장 IT/SM):
        - 즉시 전력감(Off-the-shelf Utility) 필수.
        - 필수 코어 스택(required_hard_skills: C#, .NET, DB/SQL 등) 미경험 자백 시 D축 Max 2점 클램핑.
@@ -486,8 +557,8 @@ def main():
         if c_audit_log:
             type_audit_logs.append(f"- [문항 {qid} C축] {c_audit_log}")
 
-        # D축 채용 아키타입 및 도메인 정합도 감사
-        d_audit_log = audit_domain_archetype_gating(tech_q, q_draft_text, context_data, spec_data, qid)
+        # D축 채용 아키타입 및 의미론적 증거 계약(Semantic Evidence Contract) 감사
+        d_audit_log = audit_evidence_contracts(tech_q, full_draft_text, q_draft_text, context_data, spec_data, qid)
         if "D" in tech_q.get("scores", {}):
             tech_axes["D"] = tech_q["scores"]["D"]
         if d_audit_log:
@@ -522,7 +593,7 @@ def main():
     avg_tech = sum(total_tech_scores) / len(total_tech_scores) if total_tech_scores else 0
     raw_avg_final = sum(total_final_scores) / len(total_final_scores) if total_final_scores else 0
 
-    # 🚨 Knockout Red Flag 사법 감사 집행
+    # 🚨 Knockout Red Flag 결격 사유 스크리닝
     sustained_flags, dismissed_flags = audit_knockout_gatekeeper(tech_data, hr_data, full_draft_text, args.knockout_eval)
     
     is_knockout = len(sustained_flags) > 0
@@ -531,7 +602,7 @@ def main():
         base_clamp = 75.0 if len(sustained_flags) == 1 else (73.0 if len(sustained_flags) == 2 else 70.0)
         clamp_limit = min(base_clamp, args.knockout_threshold)
         final_clamped_score = min(clamp_limit, raw_avg_final)
-        final_verdict = "DEFECT (불합격권 선고)"
+        final_verdict = "DEFECT (서류 결격 / 보완 필수)"
     else:
         clamp_limit = 100.0
         final_clamped_score = raw_avg_final
@@ -547,8 +618,8 @@ def main():
 
     report.append("## 1. 종합 점수 요약\n")
     if is_knockout:
-        report.append(f"> 🚨 **[Knockout Red Flag 사법 게이트키퍼 발동: {final_verdict}]**")
-        report.append(f"> 치명적 레드 플래그 {len(sustained_flags)}건 유효 채택으로 인해, 선형 가중합({raw_avg_final:.1f}점)이 원천 무효화되고 **최종 {final_clamped_score:.1f}점 (Max {clamp_limit:.1f}점 Hard Clamped)**으로 강제 캡핑되었습니다.\n")
+        report.append(f"> 🚨 **[Knockout Red Flag 결격 사유 스크리닝 발동: {final_verdict}]**")
+        report.append(f"> 서류 컷오프 결격 사유 {len(sustained_flags)}건 확인으로 인해, 선형 가중합({raw_avg_final:.1f}점)이 제한되고 **최종 {final_clamped_score:.1f}점 (Max {clamp_limit:.1f}점 Hard Clamped)**으로 상한 캡핑되었습니다.\n")
 
     report.append("| 문항 | HR 점수 (40%) | 테크 리드 점수 (60%) | 가중 종합 점수 |")
     report.append("| :--- | :---: | :---: | :---: |")
@@ -556,23 +627,23 @@ def main():
         report.append(r)
     report.append(f"| **원시 선형 평균** | **{avg_hr:.1f}점** | **{avg_tech:.1f}점** | **{raw_avg_final:.1f}점** |")
     if is_knockout:
-        report.append(f"| **최종 사법 판결 점수** | - | - | **{final_clamped_score:.1f}점 ({final_verdict})** |\n")
+        report.append(f"| **최종 스크리닝 집계 점수** | - | - | **{final_clamped_score:.1f}점 ({final_verdict})** |\n")
     else:
-        report.append(f"| **최종 확정 판결 점수** | **{avg_hr:.1f}점** | **{avg_tech:.1f}점** | **{final_clamped_score:.1f}점 ({final_verdict})** |\n")
+        report.append(f"| **최종 확정 집계 점수** | **{avg_hr:.1f}점** | **{avg_tech:.1f}점** | **{final_clamped_score:.1f}점 ({final_verdict})** |\n")
 
-    # 2. 🚨 Knockout Red Flag 사법 심판 로그
-    report.append("## 2. 🚨 Knockout Red Flag 사법 심판 내역 (Knockout Protocol v3.2)\n")
+    # 2. 🚨 Knockout Red Flag 스크리닝 내역
+    report.append("## 2. 🚨 서류 전형 결격 사유 스크리닝 내역 (Knockout Red Flag Protocol v3.4)\n")
     if sustained_flags:
-        report.append("### 🛑 [유효 채택된 치명적 결함 (Sustained Red Flags)]")
+        report.append("### 🛑 [서류 컷오프 결격 사유 (Critical Red Flags)]")
         for sf in sustained_flags:
             report.append(f"- 🚨 **[{sf['name']}]**: {sf['evidence']}")
-        report.append(f"\n➔ **사법 조치**: 선형 합산 전면 무효화 및 Max {clamp_limit:.1f}점 강제 캡핑(Hard Clamp) 집행\n")
+        report.append(f"\n➔ **스크리닝 조치**: 선형 합산 전면 제한 및 Max {clamp_limit:.1f}점 상한 캡핑(Hard Clamp) 집행\n")
     else:
-        report.append("### ✅ [Knockout Red Flag 심판 결과: ALL CLEAR]")
+        report.append("### ✅ [Knockout Red Flag 스크리닝 결과: ALL CLEAR (결격 사유 없음)]")
         report.append("- 3대 치명적 레드 플래그(자아과잉, 오탈자/모순, 조각모음) 전건 무결함 확인 (하드 클램프 미발동)\n")
         
     if dismissed_flags:
-        report.append("### ⚖️ [기각된 혐의 (Dismissed Flags)]")
+        report.append("### 📋 [기준 충족 확인 항목 (Passed Checks)]")
         for df in dismissed_flags:
             report.append(f"- ℹ️ **[{df['name']}]**: {df['reason']}")
         report.append("")
@@ -643,11 +714,11 @@ def main():
         report.append(f"- 세부 점수: B({tech_final_axes.get('B','-')}) C({tech_final_axes.get('C','-')}) D({tech_final_axes.get('D','-')}) H({tech_final_axes.get('H','-')}) J({tech_final_axes.get('J','-')}) / 25점 만점 ({sum(tech_final_axes.values())}점)")
         report.append(f"- 핵심 소견: {tech_comment}\n")
 
-    # 8. 종합 총평
-    report.append("## 8. 평가위원 종합 총평\n")
+    # 8. 채용 평가위원 종합 총평
+    report.append("## 8. 채용 평가위원 종합 총평\n")
     if is_knockout:
-        report.append("### 🛑 [사법 감사 패널 최종 판결문]\n")
-        report.append(f"본 지원서는 우수한 공학적 소재에도 불구하고, **치명적 결함 {len(sustained_flags)}건({', '.join(sf['name'].split(':')[0] for sf in sustained_flags)})**이 유효 채택되어 현업 채용 관문을 통과할 수 없습니다. 온정주의적 찬사는 전면 배제되며, 결함 제거 및 서사 재정렬 없이는 실전 면접 진입 시 치명적 공격을 방어할 수 없습니다.\n")
+        report.append("### 🛑 [서류 전형 컷오프 종합 심사 소견]\n")
+        report.append(f"본 지원서는 엔지니어링 역량에도 불구하고, **서류 컷오프 결격 사유 {len(sustained_flags)}건({', '.join(sf['name'].split(':')[0] for sf in sustained_flags)})**이 확인되어 현업 채용 기준을 충족하지 못했습니다. 서류 전형 통과 및 면접 진입을 위해 결격 요인 해소 및 서사 재정렬이 필수적입니다.\n")
     if hr_data.get("overall_comment"):
         report.append(f"### 🧑‍💼 HR 인사담당자 총평\n{hr_data['overall_comment']}\n")
     if tech_data.get("overall_comment"):
