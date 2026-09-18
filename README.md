@@ -7,7 +7,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-emerald.svg?style=flat-square)](LICENSE)
 [![Python 3.9+](https://img.shields.io/badge/python-3.9+_(Zero_Dependency)-blue.svg?style=flat-square)](https://www.python.org/)
-[![Version](https://img.shields.io/badge/version-3.3.0-cyan.svg?style=flat-square)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-3.4.0-cyan.svg?style=flat-square)](CHANGELOG.md)
 [![Standard](https://img.shields.io/badge/standard-agentskills.io-purple.svg?style=flat-square)](SKILL.md)
 [![Deterministic Lint](https://img.shields.io/badge/lint-deterministic_100%25-green.svg?style=flat-square)](scripts/lint.py)
 

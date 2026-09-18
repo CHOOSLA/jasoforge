@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""자소서 2인 독립 검증 기계 집계기 (grade.py v2.2).
+"""자소서 2인 독립 검증 기계 집계기 (grade.py v3.4).
 최신 2026년 LLM-as-a-Judge 연구(RULERS arXiv:2601.08654)를 준수합니다:
 1. Token-level Jaccard Overlap Ratio (≥0.75) 기반 인용구 무결성 감사 (Fuzzy Grounding).
 2. Typed Locked Rubric Gating: 서사 유형(Type_A, Type_B, Type_C) 필수 증거 및 배제 조건(Negative Boundary) 위반 시 기계적 3점 캡핑(Clamping).
@@ -332,7 +332,7 @@ def audit_axis_g_effort_gating(hr_q, draft_q_text, q_spec, qid):
     return None
 
 # ==============================================================================
-# 🚨 Knockout Red Flag 사법 게이트키퍼 (Knockout Gatekeeper Protocol v3.2)
+# 🚨 Knockout Red Flag 결격 사유 스크리닝 (Knockout Gatekeeper Protocol v3.4)
 # ==============================================================================
 KNOCKOUT_FLAG_PATTERNS = {
     "FLAG_EGO": {
@@ -458,7 +458,7 @@ def audit_knockout_gatekeeper(tech_data, hr_data, full_draft_text, knockout_eval
     return sustained_flags, dismissed_flags
 
 def main():
-    parser = argparse.ArgumentParser(description="자소서 2인 독립 검증 사후 집계기 (grade.py v2.2)")
+    parser = argparse.ArgumentParser(description="자소서 2인 독립 검증 사후 집계기 (grade.py v3.4)")
     parser.add_argument("draft", help="초안 텍스트 파일 경로 (===1=== 구분자)")
     parser.add_argument("hr_eval", help="HR 평가 결과 JSON 파일 경로")
     parser.add_argument("tech_eval", help="테크 리드 평가 결과 JSON 파일 경로")
@@ -491,7 +491,7 @@ def main():
     w_tech = args.tech_weight / total_w
 
     report = []
-    report.append("# 📊 자소서 2인 독립 검증 결과 종합 리포트 (jaso-pipeline v2.3)")
+    report.append("# 📊 자소서 2인 독립 검증 결과 종합 리포트 (jaso-pipeline v3.4)")
     report.append(f"- **가중치 반영 비율**: HR 인사담당자 {w_hr*100:.0f}% : 현업 테크 리드 {w_tech*100:.0f}%")
     report.append("- **평가 원칙**: 산술 연산 배제, Typed Locked Rubric 적용, 환각 인용 점수 롤백(Rollback), Word Bi-gram 인용구 감사\n")
 

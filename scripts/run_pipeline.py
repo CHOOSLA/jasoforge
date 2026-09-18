@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""자소서 E2E 원클릭 파이프라인 드라이버 (run_pipeline.py v2.3).
+"""자소서 E2E 원클릭 파이프라인 드라이버 (run_pipeline.py v3.4).
 Local-First Sovereign Architecture:
 오프라인 환경에서도 로컬 파일만으로 100% 자립 완결되며,
 Step 4(기계 린트) ➔ Step 5(평가 패킷 생성 or 2인 채점 집계) ➔ 최종 리포트 출력을 단번에 체이닝합니다.
@@ -17,7 +17,7 @@ def run_cmd(cmd):
     return result.returncode, result.stdout, result.stderr
 
 def main():
-    parser = argparse.ArgumentParser(description="jaso-pipeline v2.3 E2E 원클릭 드라이버")
+    parser = argparse.ArgumentParser(description="jaso-pipeline v3.4 E2E 원클릭 드라이버")
     parser.add_argument("draft", help="초안 텍스트 파일 (===1=== 구분자)")
     parser.add_argument("spec", help="공고 규격 JSON 파일 (references/spec_example.json)")
     parser.add_argument("--hr-eval", help="HR 평가 결과 JSON 파일 (선택)")
@@ -39,7 +39,7 @@ def main():
         sys.exit(1)
 
     print("=" * 60)
-    print("🚀 [Step 4] lint.py v2.3 기계 린터 결정적 검증 시작")
+    print("🚀 [Step 4] lint.py v3.4 기계 린터 결정적 검증 시작")
     print("=" * 60)
 
     lint_script = SCRIPTS_DIR / "lint.py"

@@ -6,7 +6,7 @@ description: >-
   회귀 방지, 삼진 판정 및 원장 되먹임(Flywheel) 루프를 실행할 때 트리거합니다.
 ---
 
-# 🏢 자소서 완결형 E2E 파이프라인 규격서 (jaso-pipeline v2.4 - Sovereign Edition)
+# 🏢 자소서 완결형 E2E 파이프라인 규격서 (jaso-pipeline v3.4 - Semantic Evidence Edition)
 
 이 스킬은 사용자가 채용 공고를 분석하고, 최적 직무를 매칭하며, 로컬 파일시스템(Local Sovereign) 또는 노션 DB와 연동하여 자기소개서를 작성·검증·자산화하는 전체 엔지니어링 사이클을 관장합니다.
 
@@ -140,7 +140,7 @@ flowchart TD
         E3["즉시 기계적 수정 루프<br/>(AI 주관 개입 차단)"]
         E4["PASS"]
 
-        subgraph LINT_RULES ["lint.py v3.2 검증 규칙"]
+        subgraph LINT_RULES ["lint.py v3.4 검증 규칙"]
             direction TB
             LR1["• 글자수 규격 검사 (공백 포함/제외, 90% 이상)"]
             LR2["• 작성방법 항목별 키워드 충족도 (0건 FAIL)"]
@@ -157,7 +157,7 @@ flowchart TD
     end
 
     %% Step 5: 2단계 검사-판사 독립 채점 (Prosecutor-Judge Architecture)
-    subgraph S5 ["Step 5. 2단계 검사-판사 사법 채점 (Prosecutor-Judge Architecture v3.2)"]
+    subgraph S5 ["Step 5. 2단계 검사-판사 사법 채점 (Prosecutor-Judge Architecture v3.4)"]
         F1["독립 서브에이전트 병렬 격리 호출<br/>(작성 의도 · 이전 대화 컨텍스트 완전 격리)"]
         F2["5대 입력 패킷 수신:<br/>[1. spec.json + 2. context.json + 3. 헌법 루브릭 + 4. draft.txt + 5. lint 리포트]"]
 
@@ -175,7 +175,7 @@ flowchart TD
 
         subgraph S5_P2 ["⚖️ [Phase 2: 판결 단계] 메타 감사관 & 결정론적 판사 (Meta-Judge Engine)"]
             direction TB
-            F3["사후 기계 감사 & 판결 (scripts/grade.py v3.2)<br/>• ① 인용구 실존 감사 (Fuzzy Jaccard Overlap) ➔ 허위/환각 기소 기각<br/>• ② 시니어 억지 트집 기각 vs 실질 결함 채택 (Fair Assessment)<br/>• ③ 방어 불가능 결함 1건당 헌법적 루브릭(1~5점) 결정론적 감점 선고"]
+            F3["사후 기계 감사 & 판결 (scripts/grade.py v3.4)<br/>• ① 인용구 실존 감사 (Fuzzy Jaccard Overlap) ➔ 허위/환각 기소 기각<br/>• ② 시니어 억지 트집 기각 vs 실질 결함 채택 (Fair Assessment)<br/>• ③ 방어 불가능 결함 1건당 헌법적 루브릭(1~5점) 결정론적 감점 선고"]
 
             F3_GATE{"🚨 Knockout Red Flag 사법 게이트<br/>(자아과잉 · 오탈자 3건 이상 · 조각모음 중<br/>SUSTAINED 채택이 1건이라도 있는가?)"}
 
@@ -382,7 +382,7 @@ python3 scripts/lint.py <draft.txt> <spec.json>
 
 ---
 
-### [Step 5] 2단계 검사-판사 사법 채점 & Knockout 게이트키퍼 (`grade.py`)
+### [Step 5] 2단계 검사-판사 사법 채점 & Knockout 게이트키퍼 (`grade.py v3.4`)
 
 단일 평가 프롬프트에서 필연적으로 발생하는 **온정주의(Politeness Bias)와 내부 타협(Compromise Bias)**, 그리고 **선형 가중합(Linear Weighted Sum)으로 인한 결함 물타기(Averaging Out) 착시**를 원천 차단하기 위해, **[Phase 1: 기소 단계 (검사/Red Teamer)]** ➔ **[Phase 2: 판결 단계 (판사/Meta-Judge)]** ➔ **[🚨 Knockout Red Flag Gatekeeper]**로 이어지는 3중 사법 아키텍처를 강제 집행합니다.
 
@@ -406,7 +406,7 @@ python3 scripts/lint.py <draft.txt> <spec.json>
                                        │
                                        ▼
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│ 🚨 [Knockout Red Flag 사법 게이트키퍼] (Knockout Protocol v3.2)             │
+│ 🚨 [Knockout Red Flag 사법 게이트키퍼] (Knockout Protocol v3.4)             │
 │ • 3대 치명적 레드 플래그 중 유효 채택(SUSTAINED)이 1건이라도 존재하는가?     │
 │   ① Flag 1: 자아과잉 / 비현실적 레거시 코어 전면 계승 호언장담              │
 │   ② Flag 2: 서사 모순 & 오탈자 3건 이상 방치 (무결성 훼손)                   │
