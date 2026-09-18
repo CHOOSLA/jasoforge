@@ -36,6 +36,18 @@ class SmartIngestionRouter:
         "하나은행", "우리은행", "NH농협은행", "엔씨소프트", "넥슨", "넷마블", "크래프톤", "야놀자"
     ]
 
+    # 2-1. 특정 부서/팀/파트 패턴 (예: "이즐IS팀", "코어플랫폼파트", "정산시스템팀")
+    TEAM_PATTERN = re.compile(
+        r'([가-힣A-Za-z0-9]{2,15}(?:팀|파트|본부|실|센터|그룹))',
+        re.IGNORECASE
+    )
+
+    # 일반적인 프로젝트/협업 서술용 팀 단어 (조직 정체성 리졸버에서 제외)
+    GENERIC_TEAMS = {
+        "우리팀", "저희팀", "프로젝트팀", "개발팀", "운영팀", "스터디팀", "동아리팀",
+        "연구팀", "학부팀", "과제팀", "기존팀", "해당팀", "상대팀", "다른팀", "이전팀"
+    }
+
     # 3. 자소서 문항 구조 패턴
     DRAFT_HEADER_PATTERN = re.compile(
         r'(===.+?===|\[문항\s*\d+\]|문항\s*\d+[\.:]|Q\d+[\.:]|\b질문\s*\d+)',
@@ -45,6 +57,51 @@ class SmartIngestionRouter:
     # 4. 실행 모드 제어 플래그
     LOCAL_FLAGS = ["--local", "-l", "--quick", "--offline", "로컬", "로컬모드", "노션없이", "오프라인"]
     NOTION_FLAGS = ["--sync-notion", "-s", "--notion", "노션동기화", "노션연동", "노션에저장"]
+
+    @classmethod
+    def format_confirmation_prompt(
+        cls,
+        candidate_team: str,
+        parent_company: Optional[str] = None,
+        service_domain: Optional[str] = None,
+        work_env: str = "SM(운영) / 신규 개발"
+    ) -> str:
+        """3단계 점진적 조직 정체성 확인 질문 프로토콜 (Tier 3) 포맷팅"""
+        if parent_company and service_domain:
+            return (
+                f"🔍 탐색 결과, **[{candidate_team}]**은 **'{parent_company}'** 소속의 "
+                f"[{service_domain}] 관련 포지션으로 파악됩니다.\n"
+                f"👉 **'{parent_company}'**의 [{work_env}] 직무 지원서가 맞으신가요?\n"
+                f"*(맞다면 그대로 진행하며, 다른 법인/직무라면 실제 지원 대상을 알려주세요.)*"
+            )
+        elif parent_company:
+            return (
+                f"🔍 탐색 결과, **[{candidate_team}]**은 **'{parent_company}'** 관련 조직으로 파악됩니다.\n"
+                f"👉 **'{parent_company}'** 지원서가 맞으신가요?\n"
+                f"*(맞다면 구체적인 담당 업무나 서비스 도메인을, 다르다면 실제 지원 대상을 알려주세요.)*"
+            )
+        else:
+            return (
+                f"🔍 **[{candidate_team}]**의 공식 채용 법인을 명확히 확인하기 어렵습니다.\n"
+                f"👉 해당 지원서의 **채용 법인(회사명)**과 **구체적인 담당 직무(운영/개발 등)**를 알려주시면 "
+                f"정확한 직무 엣지케이스와 루브릭을 세팅하겠습니다."
+            )
+
+    @classmethod
+    def create_organization_contract(
+        cls,
+        declared_target: str,
+        entity_pattern: str,
+        parent_legal_entity: str,
+        client_service_domain: str
+    ) -> Dict[str, str]:
+        """조직 정체성 이원화 계약 객체 생성"""
+        return {
+            "declared_target": declared_target,
+            "entity_pattern": entity_pattern,
+            "parent_legal_entity": parent_legal_entity,
+            "client_service_domain": client_service_domain
+        }
 
     @classmethod
     def route_input(cls, user_input: str, has_notion_env: bool = False) -> Dict[str, Any]:
@@ -69,11 +126,14 @@ class SmartIngestionRouter:
             "mode": mode,
             "detected_case": None,
             "company": None,
+            "candidate_team": None,
+            "search_query": None,
             "file_path": None,
             "url": None,
             "is_draft": False,
             "next_action": None,
             "needs_user_question": False,
+            "needs_identity_resolution": False,
             "question_prompt": None
         }
 
@@ -142,10 +202,25 @@ class SmartIngestionRouter:
                 else:
                     result["next_action"] = "LOOKUP_NOTION_AND_AUDIT_FIRST"
             else:
-                result["detected_case"] = "CASE_3_DRAFT_WITHOUT_COMPANY"
-                result["next_action"] = "ASK_TARGET_COMPANY_BEFORE_AUDIT"
-                result["needs_user_question"] = True
-                result["question_prompt"] = "초안을 확인했습니다. 어느 기업 및 직무(부서)를 목표로 작성하셨나요? (공고 링크나 기업명을 알려주시면 현업 테크 리드의 부서 엣지케이스 D축까지 날카롭게 채점해 드립니다)"
+                # 3단계 점진적 리졸버: 팀명/부서명 탐지 시도
+                candidate_teams = [
+                    m for m in cls.TEAM_PATTERN.findall(text)
+                    if m not in cls.GENERIC_TEAMS
+                ]
+                if candidate_teams:
+                    candidate_team = candidate_teams[0]
+                    result["detected_case"] = "CASE_DRAFT_WITH_TEAM_RESOLVER"
+                    result["candidate_team"] = candidate_team
+                    result["search_query"] = f"{candidate_team} 채용"
+                    result["next_action"] = "RESOLVE_ORGANIZATION_IDENTITY"
+                    result["needs_identity_resolution"] = True
+                    result["needs_user_question"] = True
+                    result["question_prompt"] = cls.format_confirmation_prompt(candidate_team=candidate_team)
+                else:
+                    result["detected_case"] = "CASE_3_DRAFT_WITHOUT_COMPANY"
+                    result["next_action"] = "ASK_TARGET_COMPANY_BEFORE_AUDIT"
+                    result["needs_user_question"] = True
+                    result["question_prompt"] = "초안을 확인했습니다. 어느 기업 및 직무(부서)를 목표로 작성하셨나요? (공고 링크나 기업명을 알려주시면 현업 테크 리드의 부서 엣지케이스 D축까지 날카롭게 채점해 드립니다)"
             return result
 
         # Case 4: 회사명이나 지시어 호출형 ("다우기술 자소서 봐줘", "키움증권 평가해줘")
@@ -158,6 +233,22 @@ class SmartIngestionRouter:
                 else:
                     result["next_action"] = "LOOKUP_NOTION_AND_LOAD_EXISTING_DRAFT"
                 return result
+
+        # Case 4-1: 모호한 팀명 호출형 ("이즐IS팀 봐줘", "코어플랫폼팀 평가해줘")
+        candidate_teams = [
+            m for m in cls.TEAM_PATTERN.findall(text)
+            if m not in cls.GENERIC_TEAMS
+        ]
+        if candidate_teams:
+            candidate_team = candidate_teams[0]
+            result["detected_case"] = "CASE_TEAM_CALL_RESOLVER"
+            result["candidate_team"] = candidate_team
+            result["search_query"] = f"{candidate_team} 채용"
+            result["next_action"] = "RESOLVE_ORGANIZATION_IDENTITY"
+            result["needs_identity_resolution"] = True
+            result["needs_user_question"] = True
+            result["question_prompt"] = cls.format_confirmation_prompt(candidate_team=candidate_team)
+            return result
 
         # 매칭되지 않는 짧은 일반 질문
         result["detected_case"] = "CASE_FALLBACK_QUERY"

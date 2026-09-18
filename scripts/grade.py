@@ -244,7 +244,7 @@ def audit_evidence_contracts(tech_q, full_draft_text, q_draft_text, context_data
             cur_d = tech_q.get("scores", {}).get("D", 5)
             if archetype in ["FINTECH_CORE", "MANUFACTURING_OPS"] and cur_d > 3:
                 tech_q["scores"]["D"] = 3
-                logs.append(f"ℹ️ **[도메인 불변식 미흡]** 핵심 도메인 불변식(중복 방어/동시성/장애 복구)에 대한 문장 단위 조작적 정의 부재로 D축 점수가 3점(상한)으로 조정되었습니다.")
+                logs.append(f"ℹ️ **[도메인 불변식 미흡]** 해당 도메인의 핵심 불변식에 대한 문장 단위 조작적 정의 부재로 D축 점수가 3점(상한)으로 조정되었습니다.")
 
     # 3. 도메인 정체성 괴리 (시스템/인프라 vs 웹 프론트엔드 DOM/컴포넌트)
     job_role = context_data.get("job_role", "") or spec_data.get("role", "")

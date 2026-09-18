@@ -109,5 +109,71 @@ class TestSmartIngestionRouter(unittest.TestCase):
         self.assertEqual(res["company"], "다우기술")
         self.assertEqual(res["next_action"], "READ_NOTION_PAGE_AND_AUDIT_FIRST")
 
+    def test_case_draft_with_team_resolver(self):
+        """Case 9: 모호한 팀명(이즐IS팀)이 포함된 초안 유입 시 3단계 점진적 리졸버 트리거 검증"""
+        user_in = """
+        [지원부서: 이즐IS팀]
+        [문항 1] 지원동기 및 입사 후 포부를 기술하시오.
+        이즐의 대중교통 및 결제 정산 플랫폼 시스템을 안정적으로 운영하고 장애를 사전에 방어하는 엔지니어가 되겠습니다.
+        트래픽 폭주 상황에서도 데이터 정합성을 유지하기 위해 트랜잭션 격리 수준을 분석하고 쿼리 병목을 개선했던 경험이 있습니다.
+        """
+        res = SmartIngestionRouter.route_input(user_in, has_notion_env=True)
+        self.assertEqual(res["detected_case"], "CASE_DRAFT_WITH_TEAM_RESOLVER")
+        self.assertEqual(res["candidate_team"], "이즐IS팀")
+        self.assertEqual(res["search_query"], "이즐IS팀 채용")
+        self.assertTrue(res["needs_identity_resolution"])
+        self.assertEqual(res["next_action"], "RESOLVE_ORGANIZATION_IDENTITY")
+        self.assertTrue(res["needs_user_question"])
+        self.assertIn("이즐IS팀", res["question_prompt"])
+
+    def test_case_team_call_resolver(self):
+        """Case 10: 팀명만 단독 호출("이즐IS팀 자소서 봐줘") 유입 시 리졸버 트리거 검증"""
+        user_in = "이즐IS팀 자소서 봐줘"
+        res = SmartIngestionRouter.route_input(user_in, has_notion_env=False)
+        self.assertEqual(res["detected_case"], "CASE_TEAM_CALL_RESOLVER")
+        self.assertEqual(res["candidate_team"], "이즐IS팀")
+        self.assertEqual(res["search_query"], "이즐IS팀 채용")
+        self.assertTrue(res["needs_identity_resolution"])
+        self.assertEqual(res["next_action"], "RESOLVE_ORGANIZATION_IDENTITY")
+
+    def test_generic_team_exclusion(self):
+        """Case 11: 일반적인 협업 서술용 팀 단어(우리팀, 프로젝트팀)는 리졸버를 오발동하지 않음 검증"""
+        user_in = """
+        [문항 1] 협업 경험을 기술하시오.
+        학부 시절 프로젝트팀에서 개발을 주도하며 우리팀의 일정 지연을 막기 위해 커스텀 린터를 도입했습니다.
+        팀원들과의 적극적인 소통을 통해 정해진 기간 내에 배포를 완료했습니다.
+        """
+        res = SmartIngestionRouter.route_input(user_in, has_notion_env=True)
+        # 우리팀, 프로젝트팀은 리졸버 트리거 대상이 아니므로 일반 무회사 초안(CASE_3)으로 분류되어야 함
+        self.assertEqual(res["detected_case"], "CASE_3_DRAFT_WITHOUT_COMPANY")
+        self.assertIsNone(res["candidate_team"])
+        self.assertFalse(res["needs_identity_resolution"])
+
+    def test_organization_contract_and_prompt_formatting(self):
+        """Case 12: 조직 정체성 이원화 계약 생성 및 Tier 3 확인 프롬프트 포맷팅 무결성 검증"""
+        # 1. 1회 대화형 확인 프롬프트 (검색으로 모회사-도메인 식별된 경우)
+        prompt_identified = SmartIngestionRouter.format_confirmation_prompt(
+            candidate_team="이즐IS팀",
+            parent_company="롯데이노베이트",
+            service_domain="이즐(교통/결제 서비스)",
+            work_env="SM(운영)"
+        )
+        self.assertIn("이즐IS팀", prompt_identified)
+        self.assertIn("롯데이노베이트", prompt_identified)
+        self.assertIn("이즐(교통/결제 서비스)", prompt_identified)
+        self.assertIn("SM(운영)", prompt_identified)
+
+        # 2. 조직 정체성 이원화 계약 객체 생성
+        contract = SmartIngestionRouter.create_organization_contract(
+            declared_target="이즐IS팀",
+            entity_pattern="SI_SM_OUTSOURCING",
+            parent_legal_entity="롯데이노베이트",
+            client_service_domain="이즐(교통/결제 서비스)"
+        )
+        self.assertEqual(contract["declared_target"], "이즐IS팀")
+        self.assertEqual(contract["entity_pattern"], "SI_SM_OUTSOURCING")
+        self.assertEqual(contract["parent_legal_entity"], "롯데이노베이트")
+        self.assertEqual(contract["client_service_domain"], "이즐(교통/결제 서비스)")
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
