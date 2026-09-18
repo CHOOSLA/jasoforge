@@ -5,6 +5,12 @@
   "blind_compliance_level": "NONE",
   "target_role_domain_nature": "COMMERCIAL_PRODUCTION",
   "recruitment_archetype": "FINTECH_CORE",
+  "organization_contract": {
+    "declared_target": "뱅크웨어글로벌 코어뱅킹",
+    "entity_pattern": "DIRECT_INHOUSE",
+    "parent_legal_entity": "뱅크웨어글로벌",
+    "client_service_domain": "글로벌 금융 코어뱅킹 솔루션"
+  },
   "required_hard_skills": ["Java", "C++", "RDBMS", "SQL"],
   "banned": ["OO대학교", "[가-힣]+대학교", "[가-힣]+학과", "졸업논문"],
   "proper_nouns": [

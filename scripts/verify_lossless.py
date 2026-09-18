@@ -123,11 +123,19 @@ REQUIRED_INVARIANTS = [
     # 15. Semantic Evidence-Contract Architecture (v3.4.0)
     ("의미론적 증거 계약 아키텍처", "Semantic Evidence-Contract Architecture"),
     ("어휘 경직성 및 단어 정규식 한계 극복", "어휘 경직성 및 단어 정규식의 한계 극복"),
-    ("문장 단위 3대 조작적 정의", "문장 단위 3대 조작적 정의"),
-    ("동일 요청 중복 인입 방어", "동일 요청 중복 인입 방어"),
+    ("문장 단위 조작적 정의 D축 5점 인정", "문장 단위 조작적 정의 (D축 5점 인정)"),
+    ("실질적 현상 원인 방어 조치 서사", "실질적인 현상-원인-방어 조치 서사"),
     ("극복 서사 구제 세이프 하버", "Overcoming Narrative Safe Harbor"),
     ("구조화된 증거 계약 evidence_contracts", "evidence_contracts"),
     ("런타임 시맨틱 증거 계약 표준", "Semantic_Evidence_Contract"),
+
+    # 16. Dual-Layer Organization Contract & Progressive Identity Resolver (v3.5.0)
+    ("조직 정체성 이원화 계약", "조직 정체성 이원화"),
+    ("Parent Legal Entity ↔ Client Domain", "Parent Legal Entity ↔ Client Service Domain"),
+    ("3단계 점진적 정체성 리졸버", "3단계 점진적 정체성 리졸버"),
+    ("채용 검색을 통한 관계 규명", "채용 검색을 통한 관계 규명"),
+    ("대화형 1회 확인 프로토콜", "대화형 1회 확인 프로토콜"),
+    ("조직 정체성 실전 면접 가이드", "조직 정체성 실전 면접 가이드"),
 ]
 
 def verify_file(skill_path: Path) -> bool:

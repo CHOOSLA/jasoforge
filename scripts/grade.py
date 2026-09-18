@@ -193,10 +193,11 @@ SYSTEM_ROLE_PATTERN = re.compile(
 
 def audit_evidence_contracts(tech_q, full_draft_text, q_draft_text, context_data, spec_data, qid):
     """
-    의미론적 증거 계약(Semantic Evidence-Contract Architecture v3.4) 감사 엔진:
+    의미론적 증거 계약(Semantic Evidence-Contract Architecture v3.5) 감사 엔진:
     1. LLM 평가관이 문맥/시제/의미론적 인과관계를 해석하여 작성한 evidence_contracts 검증.
     2. Python 감사 엔진은 제출된 인용구의 무결성(Word Bi-gram + Fuzzy Jaccard)을 검증하고 결정론적 캡핑을 집행.
-    3. evidence_contracts 객체 부재 시 기존 정규식 기반 audit_domain_archetype_gating()으로 안전하게 폴백.
+    3. 2차원 직교 아키타입 매트릭스(ENTERPRISE_SM Safe Harbor): DB정합성·연계안정성·배치무결성·운영추적성 입증 시 5점 만점 보장.
+    4. evidence_contracts 객체 부재 시 기존 정규식 기반 audit_domain_archetype_gating()으로 안전하게 폴백.
     """
     evidence_contracts = tech_q.get("evidence_contracts")
     if not evidence_contracts or not isinstance(evidence_contracts, dict):
@@ -692,6 +693,20 @@ def main():
             if defense:
                 report.append(f"- **추천 방어 전략**: {defense}")
             report.append("")
+
+    # 6-1. 💡 조직 정체성 실전 면접 가이드 (Dual-Layer Organization Context)
+    org_contract = context_data.get("organization_contract") or spec_data.get("organization_contract") or {}
+    parent_entity = org_contract.get("parent_legal_entity", "")
+    client_domain = org_contract.get("client_service_domain", "")
+
+    if parent_entity and client_domain and parent_entity != client_domain:
+        report.append("## 💡 [조직 정체성 실전 면접 가이드 (Dual-Layer Organization Context)]\n")
+        report.append(f"- **채용 모회사 (Parent Legal Entity)**: {parent_entity}")
+        report.append(f"- **위탁/담당 서비스 도메인 (Client Service Domain)**: {client_domain}\n")
+        report.append("### 🎯 [면접 방어 핵심 포인트]")
+        report.append(f"1. **조직 정체성 일치**: 채용 주체({parent_entity})와 실제 담당 도메인({client_domain})의 위탁·운영 관계를 명확히 인지하고, 시스템의 지속적 안정성과 비즈니스 연속성을 지켜내는 엔지니어링 책임감을 어필하십시오.")
+        report.append(f"2. **고객사 도메인 오너십**: 담당 서비스({client_domain})의 비즈니스 규칙과 데이터 흐름을 깊이 이해하고 있음을 강조하여 '단순 외주자'가 아닌 '도메인 시스템 오너십'을 증명하십시오.")
+        report.append(f"3. **엔지니어링 역량의 전이**: 지원서에서 입증한 문제 해결 팩트가 모회사({parent_entity})의 표준 엔지니어링 거버넌스에서도 재현 가능한 자산임을 강조하십시오.\n")
 
     # 7. 문항별 세부 평가 리포트
     report.append("## 7. 문항별 상세 평가 내역\n")
