@@ -174,6 +174,93 @@ def audit_axis_c_gating(tech_q, full_draft_text):
     return "✅ **PASSED**: 축 C 상용 프로덕션/신입 완수 책임/공인 피어 검증 감사 통과"
 
 # ==============================================================================
+# 🎯 채용 아키타입(Recruitment Archetype) & 도메인/지면 정합도 게이팅
+# ==============================================================================
+CONFESSION_PATTERN = re.compile(
+    r'(?:다뤄본\s*적(?:이|은)?\s*없|해본\s*적(?:이|은)?\s*없|경험(?:이|은)?\s*없|배워본\s*적(?:이|은)?\s*없|써본\s*적(?:이|은)?\s*없|접해본\s*적(?:이|은)?\s*없|처음입|처음이지)',
+    re.IGNORECASE
+)
+
+WEB_FRONTEND_EXCLUSIVE_PATTERN = re.compile(
+    r'(컴포넌트|ref|포커스|블러|DOM|CSS|HTML|스타일링|핸들러|props|JSX|input\s*태그|웹\s*화면)',
+    re.IGNORECASE
+)
+
+SYSTEM_ROLE_PATTERN = re.compile(
+    r'(시스템|인프라|백엔드|공장|운용|SM|SE|서버|임베디드|네트워크|MES|LIMS|WMS)',
+    re.IGNORECASE
+)
+
+def audit_domain_archetype_gating(tech_q, draft_q_text, context_data, spec_data, qid):
+    """
+    4대 채용 아키타입(recruitment_archetype) 및 도메인 정합도 기계 감사:
+    1. MANUFACTURING_OPS (제조업 공장 IT/SM):
+       - 즉시 전력감(Off-the-shelf Utility) 필수.
+       - 필수 코어 스택(required_hard_skills: C#, .NET, DB/SQL 등) 미경험 자백 시 D축 Max 2점 클램핑.
+    2. 도메인 정체성 괴리 (Domain Identity Mismatch):
+       - 시스템/인프라/공장운용 직무인데 본문 기술이 웹 프론트엔드 DOM/ref/컴포넌트 조작에 치중된 경우 D축 Max 3점 클램핑.
+    """
+    archetype = context_data.get("recruitment_archetype")
+    if not archetype:
+        company = context_data.get("company", "") or spec_data.get("company", "")
+        job_role = context_data.get("job_role", "") or spec_data.get("role", "")
+        if any(kw in company or kw in job_role for kw in ["제조", "공장", "화학", "쎄미켐", "MES", "생산"]):
+            archetype = "MANUFACTURING_OPS"
+        else:
+            archetype = "TECH_PURE"
+
+    required_skills = context_data.get("required_hard_skills", [])
+    if not required_skills and archetype == "MANUFACTURING_OPS":
+        required_skills = ["C#", ".NET", "DB", "SQL"]
+
+    score_d = tech_q.get("scores", {}).get("D", 5)
+
+    # 1. MANUFACTURING_OPS: 필수 코어 스택 미경험 자백 감사
+    if archetype == "MANUFACTURING_OPS" and required_skills:
+        has_confession = bool(CONFESSION_PATTERN.search(draft_q_text))
+        if has_confession:
+            confessed_skills = [s for s in required_skills if s.lower() in draft_q_text.lower()]
+            if confessed_skills:
+                if score_d > 2:
+                    tech_q["scores"]["D"] = 2
+                    return f"⚠️ **CLAMPED**: [도메인 아키타입 게이팅 ({archetype})] 즉시 전력감이 요구되는 제조 현장 IT 공고에서 필수 코어 스택({', '.join(confessed_skills)}) 미경험 자백 확인으로 D축 점수가 2점으로 기계 강제 하향되었습니다."
+
+    # 2. 도메인 정체성 괴리 (시스템/인프라 vs 웹 프론트엔드 DOM/컴포넌트)
+    job_role = context_data.get("job_role", "") or spec_data.get("role", "")
+    is_system_role = bool(SYSTEM_ROLE_PATTERN.search(job_role))
+    if is_system_role:
+        fe_hits = WEB_FRONTEND_EXCLUSIVE_PATTERN.findall(draft_q_text)
+        if len(set(fe_hits)) >= 3:
+            sys_db_hits = re.findall(r'(DB|SQL|인프라|서버|소켓|네이티브|커널|프로세스|스레드|MES|센서)', draft_q_text, re.IGNORECASE)
+            if len(sys_db_hits) <= 1:
+                if score_d > 3:
+                    tech_q["scores"]["D"] = 3
+                    return f"⚠️ **CLAMPED**: [도메인 정체성 괴리] 시스템/인프라 직무({job_role})임에도 웹 프론트엔드 UI/컴포넌트 조작({', '.join(list(set(fe_hits))[:3])}) 서술 치중으로 D축 점수가 3점으로 기계 강제 하향되었습니다."
+
+    return None
+
+def audit_axis_g_effort_gating(hr_q, draft_q_text, q_spec, qid):
+    """
+    축 G (글자수 규격 준수 & 밀도) 대형 지면 성실도 기계 감사:
+    문항 글자수 상한이 800자 이상인 대형 지면에서 실측 글자수가 상한의 75% 미만인 경우,
+    여백 방치로 인한 성실도 부족 결함으로 간주하여 G축을 Max 3점으로 기계 캡핑.
+    """
+    max_len = q_spec.get("max", 0)
+    if max_len < 800:
+        return None
+
+    basis = q_spec.get("basis", "with_spaces")
+    actual_len = len(draft_q_text) if basis == "with_spaces" else len(re.sub(r'\s+', '', draft_q_text))
+    ratio = actual_len / max_len
+
+    score_g = hr_q.get("scores", {}).get("G", 5)
+    if ratio < 0.75 and score_g > 3:
+        hr_q["scores"]["G"] = 3
+        return f"⚠️ **CLAMPED**: [지면 성실도 미달] 상한 800자 이상 대형 지면(상한 {max_len}자) 대비 실측 {actual_len}자({ratio*100:.1f}%)로 충실도 75% 미달하여 G축 점수가 3점으로 기계 강제 하향되었습니다."
+
+    return None
+
+# ==============================================================================
 # 🚨 Knockout Red Flag 사법 게이트키퍼 (Knockout Gatekeeper Protocol v3.2)
 # ==============================================================================
 KNOCKOUT_FLAG_PATTERNS = {
@@ -307,6 +394,7 @@ def main():
     parser.add_argument("--hr-weight", type=float, default=0.4, help="HR 가중치 (기본값: 0.4)")
     parser.add_argument("--tech-weight", type=float, default=0.6, help="테크 리드 가중치 (기본값: 0.6)")
     parser.add_argument("--spec", help="공고 명세 spec.json 경로 (옵션)")
+    parser.add_argument("--context", help="채용 컨텍스트 context.json 경로 (옵션)")
     parser.add_argument("--knockout-eval", help="Knockout 사법 심판 JSON 파일 경로 (옵션)")
     parser.add_argument("--knockout-threshold", type=float, default=75.0, help="Knockout 발동 시 최대 상한 점수 (기본값: 75.0)")
     parser.add_argument("--out", help="출력 마크다운 리포트 파일 경로 (옵션)")
@@ -317,6 +405,15 @@ def main():
     hr_data = json.loads(Path(args.hr_eval).read_text(encoding='utf-8'))
     tech_data = json.loads(Path(args.tech_eval).read_text(encoding='utf-8'))
     spec_data = json.loads(Path(args.spec).read_text(encoding='utf-8')) if args.spec and Path(args.spec).exists() else {}
+
+    # context_data 로드 (명시적 인자 우선, 없으면 draft 부모 디렉토리의 context.json 자동 감지)
+    context_data = {}
+    if args.context and Path(args.context).exists():
+        context_data = json.loads(Path(args.context).read_text(encoding='utf-8'))
+    else:
+        candidate = Path(args.draft).resolve().parent / "context.json"
+        if candidate.exists():
+            context_data = json.loads(candidate.read_text(encoding='utf-8'))
 
     total_w = args.hr_weight + args.tech_weight
     w_hr = args.hr_weight / total_w
@@ -332,6 +429,8 @@ def main():
     total_hr_scores = []
     total_tech_scores = []
     total_final_scores = []
+    final_hr_axes_by_qid = {}
+    final_tech_axes_by_qid = {}
 
     table_rows = []
     type_audit_logs = []
@@ -353,22 +452,10 @@ def main():
         all_verified_quotes.extend(hr_verified)
         all_verified_quotes.extend(tech_verified)
 
-        # 2. Typed Locked Rubric Gating 기계 감사 집행 (B축 & C축 Clamping 선행)
+        # 2. 환각 인용 감지 시 감점 자동 롤백 (Score Rollback)
         hr_axes = dict(hr_q.get("scores", {}))
         tech_axes = dict(tech_q.get("scores", {}))
 
-        audit_log = audit_type_rubric_gating(tech_q, full_draft_text, question_nature=q_nature)
-        if "B" in tech_q.get("scores", {}):
-            tech_axes["B"] = tech_q["scores"]["B"]
-        type_audit_logs.append(f"- [문항 {qid} B축] {audit_log}")
-
-        c_audit_log = audit_axis_c_gating(tech_q, full_draft_text)
-        if "C" in tech_q.get("scores", {}):
-            tech_axes["C"] = tech_q["scores"]["C"]
-        if c_audit_log:
-            type_audit_logs.append(f"- [문항 {qid} C축] {c_audit_log}")
-
-        # 3. 환각 인용 감지 시 감점 자동 롤백 (Score Rollback)
         hr_hallucinated = [v for v in hr_verified if not v["valid"]]
         if hr_hallucinated:
             for axis, score in list(hr_axes.items()):
@@ -383,6 +470,36 @@ def main():
                     tech_axes[axis] = 5
                     rollback_logs.append(f"- 🔄 **[점수 롤백]** 문항 {qid} 현업 테크 리드: 가짜 인용구 감지로 인해 {axis}축 감점 무효화 ({score}점 ➔ 5.0점 복원)")
 
+        # 3. Typed Locked Rubric & 기계 감사 집행 (B, C, D, G축 최종 하드 클램핑)
+        q_draft_text = draft.get(qid, "")
+
+        # B축 서사 유형 Locked Rubric 감사
+        audit_log = audit_type_rubric_gating(tech_q, full_draft_text, question_nature=q_nature)
+        if "B" in tech_q.get("scores", {}):
+            tech_axes["B"] = tech_q["scores"]["B"]
+        type_audit_logs.append(f"- [문항 {qid} B축] {audit_log}")
+
+        # C축 상용 프로덕션 및 완수 앵커 감사
+        c_audit_log = audit_axis_c_gating(tech_q, full_draft_text)
+        if "C" in tech_q.get("scores", {}):
+            tech_axes["C"] = tech_q["scores"]["C"]
+        if c_audit_log:
+            type_audit_logs.append(f"- [문항 {qid} C축] {c_audit_log}")
+
+        # D축 채용 아키타입 및 도메인 정합도 감사
+        d_audit_log = audit_domain_archetype_gating(tech_q, q_draft_text, context_data, spec_data, qid)
+        if "D" in tech_q.get("scores", {}):
+            tech_axes["D"] = tech_q["scores"]["D"]
+        if d_audit_log:
+            type_audit_logs.append(f"- [문항 {qid} D축] {d_audit_log}")
+
+        # G축 대형 지면 성실도 게이팅 감사
+        g_audit_log = audit_axis_g_effort_gating(hr_q, q_draft_text, q_spec, qid)
+        if "G" in hr_q.get("scores", {}):
+            hr_axes["G"] = hr_q["scores"]["G"]
+        if g_audit_log:
+            type_audit_logs.append(f"- [문항 {qid} G축] {g_audit_log}")
+
         # 4. 점수 계산 (롤백 적용된 점수 기준)
         hr_sum = sum(hr_axes.values())
         hr_score_100 = (hr_sum / 25.0) * 100 if hr_axes else 0.0
@@ -396,6 +513,8 @@ def main():
         total_hr_scores.append(hr_score_100)
         total_tech_scores.append(tech_score_100)
         total_final_scores.append(final_q_score)
+        final_hr_axes_by_qid[qid] = hr_axes
+        final_tech_axes_by_qid[qid] = tech_axes
 
         table_rows.append(f"| 문항 {qid} | {hr_score_100:.1f}점 | {tech_score_100:.1f}점 | **{final_q_score:.1f}점** |")
 
@@ -416,7 +535,15 @@ def main():
     else:
         clamp_limit = 100.0
         final_clamped_score = raw_avg_final
-        final_verdict = "PASS (합격권)" if final_clamped_score >= 90.0 else "REVIEW (보완 필요)"
+        has_sub_90 = any(s < 90.0 for s in total_final_scores)
+        if final_clamped_score >= 90.0:
+            if has_sub_90:
+                sub_90_qids = [qid for qid, s in zip(q_ids, total_final_scores) if s < 90.0]
+                final_verdict = f"REVIEW (문항 과락: 문항 {', '.join(sub_90_qids)} 90점 미달)"
+            else:
+                final_verdict = "PASS (합격권)"
+        else:
+            final_verdict = "REVIEW (보완 필요)"
 
     report.append("## 1. 종합 점수 요약\n")
     if is_knockout:
@@ -505,12 +632,15 @@ def main():
         hr_comment = hr_q.get('critique') or hr_q.get('comment') or '의견 없음'
         tech_comment = tech_q.get('critique') or tech_q.get('comment') or '의견 없음'
 
+        hr_final_axes = final_hr_axes_by_qid.get(qid, hr_q.get('scores', {}))
+        tech_final_axes = final_tech_axes_by_qid.get(qid, tech_q.get('scores', {}))
+
         report.append("#### 🧑‍💼 HR 인사담당자 의견")
-        report.append(f"- 세부 점수: A({hr_q.get('scores',{}).get('A','-')}) E({hr_q.get('scores',{}).get('E','-')}) F({hr_q.get('scores',{}).get('F','-')}) G({hr_q.get('scores',{}).get('G','-')}) I({hr_q.get('scores',{}).get('I','-')}) / 25점 만점")
+        report.append(f"- 세부 점수: A({hr_final_axes.get('A','-')}) E({hr_final_axes.get('E','-')}) F({hr_final_axes.get('F','-')}) G({hr_final_axes.get('G','-')}) I({hr_final_axes.get('I','-')}) / 25점 만점 ({sum(hr_final_axes.values())}점)")
         report.append(f"- 핵심 소견: {hr_comment}\n")
 
         report.append("#### 🧑‍💻 현업 테크 리드 의견")
-        report.append(f"- 세부 점수: B({tech_q.get('scores',{}).get('B','-')}) C({tech_q.get('scores',{}).get('C','-')}) D({tech_q.get('scores',{}).get('D','-')}) H({tech_q.get('scores',{}).get('H','-')}) J({tech_q.get('scores',{}).get('J','-')}) / 25점 만점")
+        report.append(f"- 세부 점수: B({tech_final_axes.get('B','-')}) C({tech_final_axes.get('C','-')}) D({tech_final_axes.get('D','-')}) H({tech_final_axes.get('H','-')}) J({tech_final_axes.get('J','-')}) / 25점 만점 ({sum(tech_final_axes.values())}점)")
         report.append(f"- 핵심 소견: {tech_comment}\n")
 
     # 8. 종합 총평

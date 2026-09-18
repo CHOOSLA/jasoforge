@@ -111,6 +111,14 @@ REQUIRED_INVARIANTS = [
     ("자아과잉 코어 계승 레드 플래그", "자아과잉"),
     ("서사 모순 및 오탈자 누적 게이트", "치명적 오탈자"),
     ("조각모음 백화점식 나열 게이트", "조각모음"),
+
+    # 14. Recruitment Archetype & Practical Domain Gating (v3.3.0)
+    ("4대 채용 아키타입 분류 체계", "4대 채용 아키타입"),
+    ("제조업 공장 IT 즉시 전력감 우선", "MANUFACTURING_OPS"),
+    ("빅테크 학습 민첩성 우선", "TECH_PURE"),
+    ("금융 증권 트랜잭션 멱등성 우선", "FINTECH_CORE"),
+    ("필수 스택 미경험 자백 D축 클램핑", "D축 점수를"),
+    ("대형 지면 성실도 게이팅 G축 75% 룰", "대형 지면 성실도 게이팅"),
 ]
 
 def verify_file(skill_path: Path) -> bool:

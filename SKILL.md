@@ -285,6 +285,13 @@ flowchart TD
 5. **최적 직무 확정**:
    - 우대사항 직격도가 가장 높은 직무를 1순위로 확정하고, 경쟁률을 고려한 2순위 대안 직무의 선정 사유를 기록.
 
+6. **4대 채용 아키타입(Recruitment Archetype) 분류 및 실무 현실성 정의**:
+   기업의 업종과 조직 특성에 따라 채용 평가의 1순위 하드 필터가 완전히 상이하므로, `context.json`에 `recruitment_archetype`을 명시하여 후속 검증 기준을 분기:
+   - **`TECH_PURE` (빅테크/SaaS/순수 IT 서비스)**: CS Fundamental, 문제해결 알고리즘, 학습 민첩성(Fast Learner) 우선. 특정 스택 미경험 자백을 바닥 원리 이해와 독해력/적응력으로 치환 시 정상 방어 논리로 수용.
+   - **`MANUFACTURING_OPS` (제조업 공장 IT/온프레미스 설비 SM·SI)**: **즉시 전력감(Off-the-shelf Utility) 절대 우선**. 소수 정예 조직에서 24/365 라인 유지보수 인계가 시급하므로, 필수 코어 스택(C#, .NET, DB/SQL 등) 미경험 자백 시 D축 치명적 감점(Max 2점 하드 캡핑). 시스템 엔지니어 공고에 웹 프론트엔드 조작 서술 치중 시 D축 Max 3점 캡핑.
+   - **`FINTECH_CORE` (금융/증권 계정계 및 채널 IT)**: 원장 무결성, 금융 트랜잭션 멱등성, DB 락 제어, 무중단/무장애, 컴플라이언스/보안 절대 우선.
+   - **`PUBLIC_SECTOR` (공기업/공공기관/금융공기업)**: 블라인드 채용 규격 무결성, 직업윤리, 지시문 전수 충족, 절차적 공정성 우선.
+
 ---
 
 ### [Step 1] 메타데이터 & 아카이브 세팅 (Dual-Mode)
@@ -415,6 +422,9 @@ python3 scripts/lint.py <draft.txt> <spec.json>
   채점관의 페르소나는 어떠한 경우에도 하드코딩되지 않으며, 오직 Step 0에서 생성된 `context.json`의 팩트(`{context.company}`, `{context.department}`, `{context.job_role}`, `{context.edge_cases}`)를 100% 동적으로 주입받아 검사 및 판사의 평가 기준을 구성합니다.
 - **점수 산출 권한 박탈 및 결정론적 하드 클램프**:
   검사는 점수를 절대 매길 수 없으며, 판사(기계 엔진)만이 감사 통과된 결함에 대해 감점을 집행합니다. 치명적 레드 플래그가 유효 채택된 경우 선형 가중합을 전면 폐기하고 총점을 Max 75점으로 강제 압축(Hard Clamp)하여 실제 채용 탈락을 재현합니다.
+- **채용 아키타입(Recruitment Archetype) 기반 D축/G축 실무 정합도 게이팅**:
+  - `MANUFACTURING_OPS` (제조업 공장 IT/SM): 즉시 전력감(Off-the-shelf Utility) 필수 공고에서 필수 코어 스택(`{context.required_hard_skills}`) 미경험 자백 시 D축 점수를 **Max 2점으로 강제 클램핑**. 시스템 엔지니어 공고에 웹 프론트엔드 UI/컴포넌트 조작 서술 치중 시 D축 **Max 3점으로 강제 클램핑**.
+  - `대형 지면 성실도 게이팅 (G축)`: 상한 800자 이상 대형 지면에서 실측 글자수가 상한 대비 75% 미만인 경우, 여백 방치로 인한 성실도 부족 결함으로 간주하여 G축 점수를 **Max 3점으로 강제 클램핑**.
 
 #### 0. ⚡ 전 단계 E2E 동적 바인딩 종합 매트릭스 (E2E Dynamic Context Binding Matrix)
 Step 0의 단일 진실 공급원(SSOT: `context.json` & `spec.json`)은 입수·가공(Step 1~3)부터 사후 검증·원장 환류(Step 4~8)까지 전 과정을 100% 수직 관통합니다:
@@ -425,7 +435,7 @@ Step 0의 단일 진실 공급원(SSOT: `context.json` & `spec.json`)은 입수�
 | **Step 2 (소재 매칭)** | `{context.target_role_domain_nature}`, `{context.company_core_values}` | • 문항 의도 분석(I축)<br>• 경험 아카이브 1차 하드 필터링<br>• 장면 4요소 표 작성 | 현대차(무결점/안전)에 규정 우회 소재 차단, R&D에 단순 CRUD 게시판 소재 차단 ➔ **소재 선정 GIGO 원천 봉쇄** |
 | **Step 3 (초안 작성)** | `{context.company}`, `{context.department}`, `{context.domain_tone_directive}`, `{context.domain_core_invariants}` | • 직무별 문체 헌법 프롬프트<br>• Engineering Narrative v7.0 작성기 | R&D 가설검증/Ablation Study 톤, 금융 99.999% 무중단 트랜잭션 톤, 모빌리티 Fail-Safe 톤 주입 ➔ **깡통 CS 자소서 박멸** |
 | **Step 4 (기계 린트)** | `{spec.max_chars}`, `{spec.length_metric_type}`, `{spec.blind_compliance_level}` | • `lint.py` 글자수/바이트 계량기<br>• 블라인드 금지어 검사기 | 삼성/현대차 Byte ATS 불일치로 인한 **마감 직전 200% 초과 접수 폭파 방지**, 공기업 블라인드 즉각 실격 방지, R&D 학술 성과 오작동 방지 |
-| **Step 5 (검사-판사)** | `{context.domain_core_invariants}`, `{context.target_role_domain_nature}`, 5대 서사유형, `{context.evaluator_weight_preset}` | • `rubric_tech.json` 슬롯<br>• 축 C 완수 책임 5점 앵커<br>• 검사-판사 독립 채점 | 루브릭 내 금융 하드코딩 박멸, **R&D 학술 연구(KCI 논문 등) 5점 만점 인정(자가당착 해소)**, 5대 서사 유형(Type A~E) 부당 감점 방지 |
+| **Step 5 (검사-판사)** | `{context.recruitment_archetype}`, `{context.required_hard_skills}`, `{context.domain_core_invariants}`, 5대 서사유형 | • `rubric_tech.json` & `rubric_hr.json`<br>• D축 아키타입 게이팅(제조업 필수스택 미경험 Max 2점)<br>• G축 대형 지면 75% 성실도 게이팅(Max 3점) | 온정주의 평점 인플레이션 박멸, **제조업 SM/SI 즉시 전력감 스택 미경험 탈락본 필터링**, 75% 미달 여백 방치 감점 집행 |
 | **Step 6, 7, 8 (원장/로그)** | `{context.application_unique_key}`, 복원된 비선형 서사 (`{fact_provenance}`) | • `score_ledger.json` / `📊 채점 기록 DB`<br>• `🗂️ 경험 인덱스 DB` (Flywheel)<br>• `revision_log.json` | 복합키(`{season}_{company}_{track}_{role}`)로 원장 충돌 방지, 복원된 팩트의 Append-Only 누적으로 **차기 지원서의 영구적 Ground Truth 자산화** |
 
 #### 0-1. 🏛️ 런타임 데이터 계약 표준 (Runtime_Data_Contract_Standards)

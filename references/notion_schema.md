@@ -48,3 +48,22 @@
 - `What`: 무엇을 변경했는지 (1~2줄)
 - `Why`: 왜 변경했는지 (1~2줄)
 - `Before` / `After`: 대규모 수정일 경우 반드시 핵심 변경 문장이나 단락, 전문을 발췌하여 전/후 대조를 명확히 남길 것 (⚠️ 절대 누락 금지)
+
+---
+
+## 4. `🧪 context.json` 표준 스키마 및 4대 채용 아키타입 (`recruitment_archetype`)
+채용 공고 및 부서 도메인 메타데이터를 저장하는 핵심 설정 규격:
+- `company` (String): 지원 대상 기업명
+- `department` (String): 지원 대상 부서 및 조직명
+- `job_role` (String): 채용 직무명
+- `deadline` (String): 지원 마감일자 (YYYY-MM-DD)
+- `recruitment_archetype` (Enum): **4대 채용 아키타입 분기 기준**
+  - `TECH_PURE`: 빅테크, SaaS, 순수 IT 서비스. CS Fundamental 및 학습 민첩성(Fast Learner) 우선. 스택 미경험 자백을 독해력/학습력으로 치환 시 방어 논리로 수용.
+  - `MANUFACTURING_OPS`: 제조업 공장 IT, 온프레미스 설비 SM/SI. **즉시 전력감(Off-the-shelf Utility) 절대 우선**. 필수 코어 스택(C#, .NET, Java, DB/SQL 등) 미경험 자백 시 D축 치명적 감점(Max 2점 하드 캡핑). 시스템 엔지니어 공고에 웹 프론트엔드 조작 위장 시 D축 Max 3점 캡핑.
+  - `FINTECH_CORE`: 금융, 증권 계정계/채널 IT. 원장 무결성, 트랜잭션 멱등성, 락 제어, 무중단/무장애, 금융 보안 우선.
+  - `PUBLIC_SECTOR`: 공기업, 공공기관, 금융공기업. 블라인드 규격 무결성, 직업윤리, 지시문 전수 충족 우선.
+- `required_hard_skills` (List[String]): 해당 직무의 타협 불가능한 필수 코어 스택 (예: `["C#", ".NET", "DB", "SQL"]`)
+- `evaluation_priority` (Enum): `OFF_THE_SHELF_UTILITY` | `CS_FUNDAMENTAL` | `TRANSACTION_INTEGRITY` | `PROCEDURAL_COMPLIANCE`
+- `domain_anti_patterns` (List[String]): 해당 직무에서 괴리감을 주는 부적합 서사/키워드 (예: 시스템 엔지니어 공고의 `["컴포넌트", "ref", "포커스", "블러", "DOM", "CSS"]`)
+- `domain_core_invariants` (String): 지원 부서의 생명선인 핵심 도메인 불변식
+- `layer1_company` / `layer2_department` / `layer3_job_edge_cases`: 3계층 기업 딥리서치 엣지케이스

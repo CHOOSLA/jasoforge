@@ -4,6 +4,8 @@
   "length_metric_type": "chars_with_space",
   "blind_compliance_level": "NONE",
   "target_role_domain_nature": "COMMERCIAL_PRODUCTION",
+  "recruitment_archetype": "FINTECH_CORE",
+  "required_hard_skills": ["Java", "C++", "RDBMS", "SQL"],
   "banned": ["OO대학교", "[가-힣]+대학교", "[가-힣]+학과", "졸업논문"],
   "proper_nouns": [
     "뱅크웨어글로벌", "코어뱅킹", "BX-Integrator", "Android", "iOS",
