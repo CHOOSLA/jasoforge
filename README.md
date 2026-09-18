@@ -1,161 +1,200 @@
 <div align="center">
 
-<img src="./assets/icon.png" alt="JasoForge Icon" width="130" />
+<img src="./assets/icon.png" alt="JasoForge Icon" width="120" />
 
-# 🔥 JasoForge (자소포지)
-### 엔터프라이즈급 기술 자기소개서 & 엔지니어링 서사 검증 엔진
+# JasoForge
+### Enterprise-Grade Engineering Narrative & Resume Verification Engine
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-emerald.svg?style=flat-square)](LICENSE)
-[![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg?style=flat-square)](https://www.python.org/)
-[![Version](https://img.shields.io/badge/version-3.1.0-cyan.svg?style=flat-square)](CHANGELOG.md)
-[![결정적 린트](https://img.shields.io/badge/lint-결정적검사-green.svg?style=flat-square)](scripts/lint.py)
+[![Python 3.9+](https://img.shields.io/badge/python-3.9+_(Zero_Dependency)-blue.svg?style=flat-square)](https://www.python.org/)
+[![Version](https://img.shields.io/badge/version-3.2.0-cyan.svg?style=flat-square)](CHANGELOG.md)
+[![Standard](https://img.shields.io/badge/standard-agentskills.io-purple.svg?style=flat-square)](SKILL.md)
+[![Deterministic Lint](https://img.shields.io/badge/lint-deterministic_100%25-green.svg?style=flat-square)](scripts/lint.py)
 
 <p align="center">
-  <b>마케팅 미사여구 배제. AI 할루시네이션 0%. 100% 결정적 엔지니어링 팩트 검증.</b><br />
-  LLM의 칭찬 일색 피상적 초안을 시니어 테크 리드의 독립 블라인드 루브릭으로 단련하여 실전 합격 서사로 탈바꿈합니다.
+  <b>마케팅 미사여구 배제. AI 할루시네이션 0%. 결정론적 엔지니어링 팩트 검증.</b><br />
+  선형 가중합의 착시와 LLM 온정주의를 차단하고, 시니어 테크 리드의 사법 루브릭과 Knockout Red Flag 게이트키퍼로 실전 합격 서사를 단련합니다.
 </p>
 
-[1초 설치](#-1초-원클릭-설치) • [왜 JasoForge인가?](#-왜-jasoforge인가) • [Before vs After](#-before--after) • [10대 루브릭 헌법](#-10대-루브릭-헌법) • [빠른 시작](#-빠른-시작-cli)
+[빠른 설치](#-빠른-설치) • [호환 런타임](#-호환-런타임-works-with) • [왜 JasoForge인가?](#-왜-jasoforge인가) • [실전 실증 대조](#-실전-실증-대조-case-study) • [핵심 아키텍처](#-핵심-아키텍처) • [10대 루브릭](#-10대-루브릭-헌법) • [CLI 가이드](#-cli-명령어-레퍼런스)
 
 </div>
 
 ---
 
-## 💡 왜 JasoForge인가?
+## ⚡ 빠른 설치
 
-시중의 일반 AI로 작성된 기술 자기소개서는 현업 시니어 개발자나 테크 리드의 서류 검토 단계에서 즉시 기각됩니다:
+JasoForge는 표준 [agentskills.io](https://agentskills.io) 규격을 준수하며, 시스템에 설치된 AI 코딩 에이전트 런타임을 자동 감지하여 배포합니다.
 
-* **미사여구의 덫 (The Fluff Trap)**: *"열정적인 태도로 원활히 소통하여 최고의 성과를 냈습니다"* 같은 진부한 형용사가 기술적 밑바닥 구현의 부재를 감추지 못합니다.
-* **AI의 '칭찬 폭탄' 편향**: 일반 LLM은 피평가자에게 아첨하도록 미세조정되어 있어, 실제 서류 전형에서 100% 탈락할 피상적인 글에도 95점 이상의 가짜 점수를 부여합니다.
-* **도메인 미스매치**: 대용량 트랜잭션, 메모리 관리, 멱등성 등 실제 기업 시스템의 엣지케이스와 무관한 단순 학술 토이 프로젝트의 API 호출 나열에 그칩니다.
+### skills.sh 패키지 매니저
+```bash
+npx skills add choosla/jasoforge
+```
 
-**JasoForge는 이를 시스템적으로 해결합니다.** 엄격한 컴파일러 패스(Compiler Pass)와 린터의 원리를 자기소개서 검증에 도입했습니다:
-
-1. **결정적 기계 린트 (`lint.py`)**: 글자수 경계 검사(상한선 90% 이상), 작성방법 세부 지침 키워드 전수 충족도, 블라인드 위반 단어 검출, 문장 길이 분포 및 리듬 검사.
-2. **컨텍스트 격리 듀얼 블라인드 채점 (`grade.py`)**: 인사담당자(작성방법 준수, 글자수, 서사 지속성)와 현업 테크 리드(Why 의식, 버린 대안, 밑바닥 레이어 규명 grit, 시스템 조망력)를 독립 서브에이전트로 분리 채점.
-3. **회귀 방지 점수 원장**: 버전 수정 과정($V_1 \rightarrow V_2$)에서 점수가 진동하거나 이전 강점이 퇴행하는 현상을 수학적으로 방지.
-
----
-
-## ⚡ 1초 원클릭 설치
-
-JasoForge는 **Claude Code**, **Gemini CLI / Antigravity**, **Universal Agents** 환경을 스마트하게 감지하여 배포됩니다. 미설치된 런타임의 폴더를 임의로 생성하지 않습니다.
-
-### macOS & Linux
+### macOS & Linux (원클릭)
 ```bash
 curl -fsSL https://raw.githubusercontent.com/choosla/jasoforge/main/install.sh | bash
 ```
 
-### Windows (PowerShell 5.1+ 또는 7+)
+### Windows (PowerShell 5.1+ / 7+)
 ```powershell
 irm https://raw.githubusercontent.com/choosla/jasoforge/main/install.ps1 | iex
 ```
 
-### Python 범용 CLI (무의존성 단독 설치)
+### Python 무의존성 설치 (Standard Library Only)
 ```bash
 git clone https://github.com/choosla/jasoforge.git
 cd jasoforge
 python3 installer.py
 ```
 
-> **스마트 런타임 감지 지원 경로**:
-> - `Universal Agents`: `~/.agents/skills/jaso-pipeline`
-> - `Claude Code`: `~/.claude/skills/jaso-pipeline` (Claude 환경 감지 시)
-> - `Gemini / AGY`: `~/.gemini/config/skills/jaso-pipeline` (Gemini 환경 감지 시)
+---
+
+## 🖥️ 호환 런타임 (Works with)
+
+JasoForge는 단일 소스 트리로 주요 AI 코딩 에이전트 환경에 네이티브 동기화됩니다:
+
+| 런타임 환경 | 배포 경로 | 활성화 방식 |
+| :--- | :--- | :--- |
+| **Claude Code** | `~/.claude/skills/jaso-pipeline` | 자동 로드 또는 `/jaso-pipeline` |
+| **Gemini CLI / Antigravity** | `~/.gemini/config/skills/jaso-pipeline` | 자동 로드 또는 `/jaso-pipeline` |
+| **Universal Agents** | `~/.agents/skills/jaso-pipeline` | 글로벌 표준 스킬 자동 인식 |
+| **OpenAI Codex** | `~/.codex/skills/jaso-pipeline` | `SKILL.md` 표준 계약 호환 |
 
 ---
 
-## 📊 Before & After
+## 💡 왜 JasoForge인가?
 
-| 평가 기준 | 일반 AI 생성 자기소개서 | 🔥 JasoForge 단련 서사 |
+일반 LLM(ChatGPT, Claude 등)에게 자소서를 검토시키면 **"훌륭합니다! 95점입니다"**라며 칭찬 일색의 점수를 내놓습니다. 그러나 이 초안들은 실제 현업 테크 리드의 서류 전형에서 100% 탈락합니다.
+
+### 1. 선형 가중합의 함정 (The Linear Averaging Trap)
+기존 채점 프롬프트는 10개 축 점수를 단순 가중 평균(`HR 40% + Tech 60%`)합니다.  
+그 결과, **신입이 40년 레거시 코어 계승을 장담하는 오만함(Flag 1)**, **도구주의를 주장하면서 오탈자 5건을 방치한 서사 모순(Flag 2)**, **6개 프로젝트를 나열한 조각모음(Flag 3)**이 있어도, 글자수 채우기나 학술 스펙 키워드 덕분에 **94.0점(합격권 착시)**이 찍히는 치명적인 결함이 발생합니다.
+
+### 2. 현실 채용은 '관문 탈락(Knockout)'입니다
+실제 기업 채용 평가는 합산 점수가 아니라 **"단 1개의 치명적 결함(Knockout Factor)"**으로 탈락시키는 구조입니다.  
+JasoForge는 **Knockout Red Flag 사법 게이트키퍼**를 도입하여, 치명적 결함 적발 시 선형 가중합을 즉시 무효화하고 총점을 Max 70~75점(DEFECT)으로 강제 캡핑(Hard Clamp)합니다.
+
+---
+
+## 📊 실전 실증 대조 (Case Study)
+
+동일 지원자(컴퓨터공학 전공)의 실제 **다우기술(금융/증권 IT 개발)** 서류 합격본과 탈락본을 JasoForge v3.2 엔진으로 정밀 블라인드 심리한 결과입니다:
+
+| 평가 지표 | ❌ 실제 탈락본 (`c1e36478`) | ✅ 실제 합격본 (`8b4cd477`) |
 | :--- | :--- | :--- |
-| **피드백 태도** | 온정주의, 무조건적인 칭찬 ("훌륭한 초안입니다! 95점") | 냉철한 시니어 테크 리드 시점의 감점 요인 직격 |
-| **글자수 준수** | 대략적인 글자수 환각 (700자 요청 시 550자나 820자 작성) | 바이트/글자수 단위 결정적 상하한선 준수 ($\ge 90\%$) |
-| **작성 지침 충족** | 복합 문항 지시사항 일부 누락 | 지시문 내 모든 조건의 키워드 충족도 0건 시 즉시 FAIL |
-| **기술적 깊이** | 단순 프레임워크/라이브러리 사용 나열 | 밑바닥 레이어 원인 규명, 버린 대안 및 트레이드오프 서술 |
-| **면접 방어력** | 면접관의 기술 압박 질문에 방어 논리 붕괴 | **킬러 꼬리질문(압박 질문)** 및 추천 방어 논리 자동 도출 |
-| **시스템성** | 감에 의존한 프롬프트 재수정 | 린트 $\rightarrow$ 블라인드 채점 $\rightarrow$ 점수 원장 기록 $\rightarrow$ 회귀 방지 |
+| **소재 구성** | MFC, MobileNet, SSL Pinning, 캠핑카 등 6개 프로젝트 나열 | **Ditda 디자인 외주 서비스 단일 프로젝트** 멱등성/장애방어 집중 |
+| **온보딩 태도** | "40년간 축적된 코드를 안정적으로 계승" (비현실적 호언) | "화면 하나를 골라 데이터 유입 흐름을 도식화" (현실적 기여) |
+| **무결성/오탈자** | '곳', '끕어올려', '가늘할', '옷기던', '옷겨본' (5건 방치) | 오탈자 0건, 비문 0건, 완벽한 서류 무결성 |
+| **기존 선형 점수** | **94.0점 (A+ 통과권 - 착시 발생)** | **99.4점 (PASS - 합격권)** |
+| **🚨 Knockout 심리** | **3대 레드 플래그 전원 유효 채택 (3 SUSTAINED)** | **3대 레드 플래그 전건 기각 (ALL CLEAR)** |
+| **v3.2 사법 판결** | **70.0점 (DEFECT / 불합격권 선고)** *(Hard Clamped)* | **99.4점 (PASS / 최상위 1% 실전 합격권)** |
+| **점수 변별력** | **기존 5.4점 차이 ➔ 29.4점 격차로 실제 합/불 결과 완벽 재현** |
+
+---
+
+## 🏛️ 핵심 아키텍처
+
+```
+[입력 패킷: draft.txt + spec.json + context.json]
+     │
+     ▼
+┌─────────────────────────────────────────────────────────────┐
+│ Pass 1. 결정적 기계 린트 (scripts/lint.py)                    │
+│ • 글자수/바이트 계량 (상한 대비 80% 하드 하한선)               │
+│ • 지시문 키워드 충족도 (0건 시 FAIL)                        │
+│ • 블라인드 금지어 검출 & 매크로 고유명사 밀도               │
+│ • 🚨 치명적 오탈자 3건 이상 누적 시 CRITICAL FAIL 즉시 차단 │
+└──────────────────────────────┬──────────────────────────────┘
+                               │ PASS
+                               ▼
+┌─────────────────────────────────────────────────────────────┐
+│ Pass 2. 2단계 검사-판사 사법 심리 (Prosecutor-Judge Eval)   │
+│ • Phase 1 (기소): 점수 권한 박탈 2대 레드팀 검사             │
+│   - HR 검사 (40%): A, E, F, G, I 지시문 이탈 기소           │
+│   - Tech 검사 (60%): B, C, D, H, J 기술허점/3단계 So What 추궁│
+│ • Phase 2 (판결): 판사 엔진 (Word Bi-gram Fuzzy Jaccard)     │
+│   - 환각 기소 즉시 기각 vs 실질 결함 채택                   │
+└──────────────────────────────┬──────────────────────────────┘
+                               │
+                               ▼
+┌─────────────────────────────────────────────────────────────┐
+│ 🚨 Pass 3. Knockout Red Flag 사법 게이트키퍼 (Hard Clamp)   │
+│ • 3대 치명적 레드 플래그 유효 채택 건수 감사:               │
+│   Flag 1. 자아과잉 / 비현실적 레거시 코어 전면 계승 장담    │
+│   Flag 2. 서사 모순 & 오탈자 3건 이상 방치                  │
+│   Flag 3. 무관한 프로젝트 조각모음 나열 (Type_C 독소 저촉)  │
+│                                                             │
+│   ➔ [결함 적발 시 (탈락본)]: 선형 합산 전면 무효화 &        │
+│      총점 Max 70~75.0점 강제 캡핑 ➔ DEFECT (불합격권)       │
+│   ➔ [0건 무결점 (합격본)]: HR 40% + Tech 60% 정상 선형 랭킹│
+└──────────────────────────────┬──────────────────────────────┘
+                               │
+                               ▼
+┌─────────────────────────────────────────────────────────────┐
+│ Pass 4. 회귀 방지 점수 원장 (score_ledger.json)             │
+│ • (지원서, 버전, 문항, 축) 단위 영구 보존                   │
+│ • v1 대비 v2 점수 하락(퇴행) 감지 및 진동 방지 국소 수정     │
+└─────────────────────────────────────────────────────────────┘
+```
 
 ---
 
 ## 📜 10대 루브릭 헌법
 
-모든 엔지니어링 서사는 10개 평가 축(축당 10점, 100점 만점)을 기준으로 엄격하게 채점됩니다:
+모든 지원서는 10개 공통 평가 축(축당 10점, 총 100점 만점)을 기준으로 평가됩니다:
 
-```mermaid
-pie title 100점 만점 루브릭 헌법 가중치
-    "A. 상황 설명 비중 (<=30%)" : 10
-    "B. 판단 근거 & Why 의식" : 10
-    "C. 완수 과정 & 잠재 리스크 책임" : 10
-    "D. 지원 도메인 핵심 연결" : 10
-    "E. 질문 본질 의도 & 플로우 일치" : 10
-    "F. 작성방법 지침 전수 충족" : 10
-    "G. 글자수 규격 준수 (>=90%)" : 10
-    "H. 고유성 (복붙 치환 불가성)" : 10
-    "I. 행동화된 업무 원칙의 지속성" : 10
-    "J. 팩트 무결성 (가짜 수치 배제)" : 10
-```
-
-| 축 | 핵심 원칙 | 엄격 감점 기준 |
-| :---: | :--- | :--- |
-| **A** | **상황 설명 비중 $\le 30\%$** | 배경/상황 설명이 글자수의 30%를 초과하거나 단순 기능 나열 시 감점 |
-| **B** | **판단 근거 & Why 의식** | 원리 규명 없는 단순 API 적용, 버린 대안(트레이드오프) 부재 시 감점 |
-| **C** | **완수 과정 & 리스크 책임** | 잠재 리스크를 확인하지 않고 기능 구현 선에서 중단한 경우 감점 |
-| **D** | **지원 도메인 핵심 연결** | 지원 도메인의 핵심 시스템 및 엣지케이스와 무관한 단순 과제 서술 시 감점 |
-| **E** | **질문 본질 의도 & 플로우 일치** | 문항의 평가 의도 미관통, 지시문의 서술 순서 인과관계 불일치 시 감점 |
-| **F** | **작성방법 지침 전수 충족** | 지시문 필수 항목(구체적 행동, 결과, 보완 노력, 계기 등) 누락 시 감점 |
-| **G** | **글자수 규격 준수** | 상한 대비 충실도 90% 미만 시 감점 (미지정 시 선행 질문 확정, 자유 양식 시 업계표준 적용 또는 N/A 처리) |
-| **H** | **고유성 (치환 불가성)** | 고유명사 제거 시 타사/타직무 어디에나 복붙 가능한 일반론 문장 시 감점 |
-| **I** | **행동화된 가치관 지속성** | 추상적인 형용사("성실함") 나열, 입사 후 업무 지속성이 안 보일 때 감점 |
-| **J** | **팩트 무결성 & 비문 배제** | 검증되지 않은 가짜 수치(0ms 등)나 왜곡된 사실, 오탈자/비문 존재 시 감점 |
+| 축 | 평가 항목 | 가중치 | 핵심 심리 기준 |
+| :---: | :--- | :---: | :--- |
+| **A** | **상황 설명 비중 $\le 30\%$** | HR | 배경 설명은 1~2문장으로 압축. 지면의 70% 이상을 행동과 판단에 몰입했는가 |
+| **B** | **판단 근거 & Why 의식** | Tech | 단순 라이브러리 사용을 넘어, 왜 그 방식을 택했고 무엇을 버렸는지(트레이드오프) 입증 |
+| **C** | **완수 과정 & 리스크 책임** | Tech | 상용 프로덕션 실전성 또는 신입 엔지니어링 5대 완수 앵커(배포, OOM 극복, 부하 테스트 등) 실증 |
+| **D** | **부서 엣지케이스 연결** | Tech | 지원 부서의 고유 핵심 불변식을 관통하며, 신입으로서 현실적 온보딩 자세를 갖추었는가 |
+| **E** | **질문 본질 의도 & 플로우** | HR | 지시문의 두괄식 질문 순서와 인과관계에 정확히 호응하는가 |
+| **F** | **작성방법 지침 전수 충족** | HR | 행동, 결과, 보완 노력, 계기 등 공고의 필수 항목을 100% 충족했는가 |
+| **G** | **글자수 규격 준수** | HR | 상한선 대비 90% 이상의 충실도 유지 (80~85%는 고밀도 압축 시 5점 구제) |
+| **H** | **고유성 (치환 불가성)** | Tech | 고유명사를 가려도 본인만의 팩트가 생생한가 ([CS Fundamental Safe Harbor] 보장) |
+| **I** | **행동화된 가치관 지속성** | HR | 단순 반성문이 아닌 업무 규칙(시스템적 강제)으로 체화되어 입사 후에도 지속되는가 |
+| **J** | **근거 무결성 & 팩트 일치** | Tech | 가짜 수치 날조 배제, 서사 모순 및 치명적 오탈자 배제 |
 
 ---
 
-## 🚦 스마트 진입 가이드 (Smart Ingestion)
+## 📐 5대 직교 서사 유형 (Orthogonal Narrative Matrix)
 
-JasoForge는 사용자의 입력 형태를 스스로 감지하여 최적의 단련 경로로 안내합니다:
+기술 프로젝트 문항(B축)은 사전에 선언된 단 하나의 서사 유형만을 기준으로 잠금 루브릭(Locked Rubric)을 적용합니다:
 
-1. **공고 링크 유입 시 (`https://...`)**:
-   - 채용 공고를 자동 파싱하여 `기업/계열사/부서/직무/경쟁률`을 추출하고 3계층 딥리서치(`context.json`)를 생성합니다.
-2. **자소서 본문만 띡 유입 시 (초안 텍스트)**:
-   - 본문 속 기업명을 자동 탐지(모호할 경우 1회 확인 질문)하여 목표 부서의 기술 엣지케이스(D축)와 직격 대조하는 **Audit-First 정밀 진단**으로 직행합니다.
-3. **노션 연동 환경 (Mode B)**:
-   - 노션 6대 DB(`회사별 지원 현황`, `지원서 아카이브`, `Deep Research 노트`)를 선행 조회하여 이미 작성해둔 지원서가 있다면 즉시 로드합니다.
+* **Type A (기술적 의사결정 / 트레이드오프형)**: 버린 대안 1건 필수 명시 및 수치적/공학적 비교.
+* **Type B (밑바닥 심층 디버깅 / Grit형)**: OS, 네이티브 핸들, 바이트코드 레벨의 근본 원인 규명 및 PR/패치 완수.
+* **Type C (풀스택 시스템 조망형)**: 단일 서비스 내 클라이언트-백엔드-인프라 간 데이터 결속. *(무관한 프로젝트 조각모음 엄격 금지)*
+* **Type D (알고리즘 및 복잡도 최적화형)**: 시간/공간 복잡도 개선($O(N^2) \rightarrow O(N \log N)$) 및 벤치마크.
+* **Type E (데이터 및 인프라 파이프라인형)**: 비동기 분산 처리, I/O 병목 제거, 스루풋(TPS/QPS) 지연 최소화.
 
 ---
 
-## 🛠️ 빠른 시작 (CLI)
+## 🛠️ CLI 명령어 레퍼런스
 
-JasoForge는 외부 종속성 없이 로컬 텍스트 및 JSON 파일만으로 완결 구동됩니다:
+JasoForge는 외부 의존성(Third-party pip package)이 전혀 없는 순수 파이썬 표준 라이브러리로 구동됩니다:
 
-### 1. 결정적 기계 린트 (Deterministic Lint)
 ```bash
+# 1. 결정적 기계 린트 실행 (글자수, 지시문, 오탈자 게이트)
 python3 scripts/lint.py draft.txt spec.json
-```
-*글자수 도달율, 작성방법 키워드 충족도, 블라인드 위반 여부, 문장 리듬 검사.*
 
-### 2. 2단계 검사-판사 독립 채점 (Prosecutor-Judge Architecture)
-```bash
-python3 scripts/grade.py draft.txt \
+# 2. 2단계 검사-판사 사법 채점 및 리포트 생성
+python3 scripts/grade.py draft.txt hr_eval.json tech_eval.json \
   --spec spec.json \
-  --context context.json \
-  --rubric references/rubric_tech.json \
-  --output report.json
-```
-*Phase 1(기소): 점수 권한이 박탈된 2대 레드팀 검사가 'So What?' 3단계 추궁 및 흠집 공격.*
-*Phase 2(판결): 판사 엔진이 인용구 감사(Fuzzy Jaccard) 후 억지 트집 기각 및 결정론적 감점 선고.*
+  --knockout-threshold 75.0 \
+  --out report.md
 
-### 3. 엔드투엔드 파이프라인 통합 실행
-```bash
-python3 scripts/run_pipeline.py \
-  --draft draft.txt \
-  --spec spec.json \
-  --context context.json
+# 3. 무손실 회귀 불변식 76개 전수 검증
+python3 scripts/verify_lossless.py
+
+# 4. 스마트 라우팅 및 런타임 자동 배포
+python3 installer.py --target auto
 ```
 
 ---
 
-## 🤝 라이선스 (License)
+## 🤝 기여 및 라이선스 (License)
 
-이 프로젝트는 **[MIT License](LICENSE)** 하에 배포됩니다.
-오픈소스 생태계와 개발자 커뮤니티의 합격 서사 단련을 위해 자유롭게 사용하고 기여하실 수 있습니다.
+이 프로젝트는 **[MIT License](LICENSE)** 하에 배포됩니다.  
+모든 개발자가 마케팅성 미사여구가 아닌, 진짜 엔지니어링 팩트와 시스템적 무결성으로 합격 서사를 증명할 수 있도록 지원합니다.

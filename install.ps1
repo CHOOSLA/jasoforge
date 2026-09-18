@@ -13,10 +13,6 @@ param(
 $ErrorActionPreference = "Stop"
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 
-Write-Host "=================================================================" -ForegroundColor Cyan
-Write-Host "  🔥 JasoForge Installer (Windows PowerShell)                    " -ForegroundColor Cyan
-Write-Host "  Deterministic Resume Vetting & Engineering Narrative Engine   " -ForegroundColor Cyan
-Write-Host "=================================================================" -ForegroundColor Cyan
 
 # Locate Python
 $PythonExe = $null

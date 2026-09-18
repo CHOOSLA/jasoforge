@@ -17,13 +17,8 @@ cleanup() {
 }
 trap cleanup EXIT
 
-echo "================================================================="
-echo "  🔥 JasoForge Installer (macOS & Linux)                        "
-echo "  Deterministic Resume Vetting & Engineering Narrative Engine   "
-echo "================================================================="
-
 if ! command -v python3 >/dev/null 2>&1; then
-    echo "❌ Error: python3 is required but not installed." >&2
+    echo "error: python3 is required but not installed." >&2
     exit 1
 fi
 

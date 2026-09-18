@@ -6,12 +6,12 @@
 
 set -euo pipefail
 
-VERSION="3.1.0"
+VERSION="3.2.0"
 DIST_DIR="dist"
 PACKAGE_NAME="jasoforge-v${VERSION}"
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-echo "📦 Packaging JasoForge ${VERSION}..."
+echo "Building release package jasoforge ${VERSION}..."
 mkdir -p "${ROOT_DIR}/${DIST_DIR}"
 
 TMP_BUILD="$(mktemp -d)"
