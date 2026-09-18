@@ -147,7 +147,19 @@ class TestSmartIngestionRouter(unittest.TestCase):
         # 우리팀, 프로젝트팀은 리졸버 트리거 대상이 아니므로 일반 무회사 초안(CASE_3)으로 분류되어야 함
         self.assertEqual(res["detected_case"], "CASE_3_DRAFT_WITHOUT_COMPANY")
         self.assertIsNone(res["candidate_team"])
+    def test_collaboration_teams_not_triggering_resolver(self):
+        """Case 13: 본문 서사 속 협업 팀(QA팀, 백엔드팀, 디자인팀)은 리졸버를 오발동하지 않고 CASE_3으로 안전 분기 검증"""
+        user_in = """
+        [문항 1] 협업 경험을 기술하시오.
+        인턴 시절 백엔드팀 및 QA팀과 협업하여 락 경합 및 트랜잭션 지연 문제를 해결했습니다.
+        디자인팀의 변경 요구사항을 조율하고 기획팀과 일정 합의를 도출하여 안정적으로 배포를 완수했습니다.
+        인프라팀과의 소통을 통해 모니터링 대시보드를 구축했습니다.
+        """
+        res = SmartIngestionRouter.route_input(user_in, has_notion_env=True)
+        self.assertEqual(res["detected_case"], "CASE_3_DRAFT_WITHOUT_COMPANY")
+        self.assertIsNone(res["candidate_team"])
         self.assertFalse(res["needs_identity_resolution"])
+        self.assertEqual(res["next_action"], "ASK_TARGET_COMPANY_BEFORE_AUDIT")
 
     def test_organization_contract_and_prompt_formatting(self):
         """Case 12: 조직 정체성 이원화 계약 생성 및 Tier 3 확인 프롬프트 포맷팅 무결성 검증"""

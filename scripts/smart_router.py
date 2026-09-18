@@ -36,17 +36,17 @@ class SmartIngestionRouter:
         "하나은행", "우리은행", "NH농협은행", "엔씨소프트", "넥슨", "넷마블", "크래프톤", "야놀자"
     ]
 
-    # 2-1. 특정 부서/팀/파트 패턴 (예: "이즐IS팀", "코어플랫폼파트", "정산시스템팀")
+    # 2-1. 특정 부서/팀/파트 패턴 (단문 호출용: "이즐IS팀 봐줘", "코어플랫폼파트")
     TEAM_PATTERN = re.compile(
-        r'([가-힣A-Za-z0-9]{2,15}(?:팀|파트|본부|실|센터|그룹))',
+        r'([가-힣A-Za-z0-9\-_]{2,20}(?:팀|파트|본부|실|센터|그룹))',
         re.IGNORECASE
     )
 
-    # 일반적인 프로젝트/협업 서술용 팀 단어 (조직 정체성 리졸버에서 제외)
-    GENERIC_TEAMS = {
-        "우리팀", "저희팀", "프로젝트팀", "개발팀", "운영팀", "스터디팀", "동아리팀",
-        "연구팀", "학부팀", "과제팀", "기존팀", "해당팀", "상대팀", "다른팀", "이전팀"
-    }
+    # 2-2. 명시적 지원 대상 헤더 패턴 (초안 상단 메타데이터: "[지원부서: 이즐IS팀]", "지원팀: ...", "희망부서: ...")
+    EXPLICIT_HEADER_TEAM_PATTERN = re.compile(
+        r'(?:\[?(?:지원\s*(?:기업|회사|부서|팀|직무)|희망\s*(?:부서|팀|직무)|목표\s*(?:부서|팀))\s*[:：\-]\s*([가-힣A-Za-z0-9\-_]{2,20}(?:팀|파트|본부|실|센터|그룹))\]?)',
+        re.IGNORECASE
+    )
 
     # 3. 자소서 문항 구조 패턴
     DRAFT_HEADER_PATTERN = re.compile(
@@ -202,13 +202,11 @@ class SmartIngestionRouter:
                 else:
                     result["next_action"] = "LOOKUP_NOTION_AND_AUDIT_FIRST"
             else:
-                # 3단계 점진적 리졸버: 팀명/부서명 탐지 시도
-                candidate_teams = [
-                    m for m in cls.TEAM_PATTERN.findall(text)
-                    if m not in cls.GENERIC_TEAMS
-                ]
-                if candidate_teams:
-                    candidate_team = candidate_teams[0]
+                # 3단계 점진적 리졸버: 초안 상단의 명시적 헤더([지원부서: XX팀])만 검사
+                # (서사 본문 속 협업 팀명인 QA팀, 백엔드팀 등의 오탐/환각 원천 차단)
+                header_match = cls.EXPLICIT_HEADER_TEAM_PATTERN.search(text)
+                if header_match:
+                    candidate_team = header_match.group(1)
                     result["detected_case"] = "CASE_DRAFT_WITH_TEAM_RESOLVER"
                     result["candidate_team"] = candidate_team
                     result["search_query"] = f"{candidate_team} 채용"
@@ -234,21 +232,20 @@ class SmartIngestionRouter:
                     result["next_action"] = "LOOKUP_NOTION_AND_LOAD_EXISTING_DRAFT"
                 return result
 
-        # Case 4-1: 모호한 팀명 호출형 ("이즐IS팀 봐줘", "코어플랫폼팀 평가해줘")
-        candidate_teams = [
-            m for m in cls.TEAM_PATTERN.findall(text)
-            if m not in cls.GENERIC_TEAMS
-        ]
-        if candidate_teams:
-            candidate_team = candidate_teams[0]
-            result["detected_case"] = "CASE_TEAM_CALL_RESOLVER"
-            result["candidate_team"] = candidate_team
-            result["search_query"] = f"{candidate_team} 채용"
-            result["next_action"] = "RESOLVE_ORGANIZATION_IDENTITY"
-            result["needs_identity_resolution"] = True
-            result["needs_user_question"] = True
-            result["question_prompt"] = cls.format_confirmation_prompt(candidate_team=candidate_team)
-            return result
+        # Case 4-1: 모호한 팀명 단문 호출형 ("이즐IS팀 봐줘", "코어플랫폼팀 평가해줘", "이즐IS팀")
+        # (100자 이하의 짧은 사용자 프롬프트일 때만 팀명으로 바인딩하여 3단계 리졸버 가동)
+        if len(text) <= 100:
+            team_match = cls.TEAM_PATTERN.search(text)
+            if team_match:
+                candidate_team = team_match.group(1)
+                result["detected_case"] = "CASE_TEAM_CALL_RESOLVER"
+                result["candidate_team"] = candidate_team
+                result["search_query"] = f"{candidate_team} 채용"
+                result["next_action"] = "RESOLVE_ORGANIZATION_IDENTITY"
+                result["needs_identity_resolution"] = True
+                result["needs_user_question"] = True
+                result["question_prompt"] = cls.format_confirmation_prompt(candidate_team=candidate_team)
+                return result
 
         # 매칭되지 않는 짧은 일반 질문
         result["detected_case"] = "CASE_FALLBACK_QUERY"
