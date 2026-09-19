@@ -17,9 +17,10 @@ def run_cmd(cmd):
     return result.returncode, result.stdout, result.stderr
 
 def main():
-    parser = argparse.ArgumentParser(description="jaso-pipeline v3.4 E2E 원클릭 드라이버")
+    parser = argparse.ArgumentParser(description="jaso-pipeline v3.7 E2E 원클릭 드라이버")
     parser.add_argument("draft", help="초안 텍스트 파일 (===1=== 구분자)")
     parser.add_argument("spec", help="공고 규격 JSON 파일 (references/spec_example.json)")
+    parser.add_argument("--context", help="기업/직무 컨텍스트 JSON 파일 (선택, 미지정 시 spec/draft 부모 폴더 자동 탐색)")
     parser.add_argument("--hr-eval", help="HR 평가 결과 JSON 파일 (선택)")
     parser.add_argument("--tech-eval", help="테크 리드 평가 결과 JSON 파일 (선택)")
     parser.add_argument("--out-packets-dir", default="scratch/packets", help="평가 패킷 저장 폴더 (기본: scratch/packets)")
@@ -37,6 +38,26 @@ def main():
     if not spec_path.exists():
         print(f"❌ [에러] 스펙 파일이 존재하지 않습니다: {spec_path}")
         sys.exit(1)
+
+    # context.json 탐색 및 로드 (명시 인자 우선, 없으면 spec 또는 draft 동위 폴더 자동 감지)
+    context_path = None
+    if args.context:
+        context_path = Path(args.context).resolve()
+    else:
+        cand1 = spec_path.parent / "context.json"
+        cand2 = draft_path.parent / "context.json"
+        if cand1.exists():
+            context_path = cand1
+        elif cand2.exists():
+            context_path = cand2
+
+    context_data = {}
+    if context_path and context_path.exists():
+        try:
+            context_data = json.loads(context_path.read_text(encoding="utf-8"))
+            print(f"📦 [Context Auto-Merge] 컨텍스트 파일 감지 및 병합: {context_path.name}")
+        except Exception as e:
+            print(f"⚠️ [주의] context.json 로드 실패: {e}")
 
     print("=" * 60)
     print("🚀 [Step 4] lint.py v3.4 기계 린터 결정적 검증 시작")
@@ -59,6 +80,15 @@ def main():
 
         draft_content = draft_path.read_text(encoding="utf-8")
         spec_data = json.loads(spec_path.read_text(encoding="utf-8"))
+
+        # Deep Merge: context_data를 바탕에 두고 spec_data로 정밀 융합
+        merged_spec = dict(context_data)
+        for k, v in spec_data.items():
+            if k in merged_spec and isinstance(merged_spec[k], dict) and isinstance(v, dict):
+                merged_spec[k].update(v)
+            else:
+                merged_spec[k] = v
+
         hr_rubric = (REFS_DIR / "rubric_hr.json").read_text(encoding="utf-8")
         tech_rubric = (REFS_DIR / "rubric_tech.json").read_text(encoding="utf-8")
 
@@ -68,7 +98,7 @@ def main():
 작성 대화 맥락, 이전 피드백, AI 메모리는 일체 배제하고 오직 주어진 텍스트와 지침만으로 평가하십시오.
 
 [평가 대상 공고 및 문항 스펙]
-{json.dumps(spec_data, ensure_ascii=False, indent=2)}
+{json.dumps(merged_spec, ensure_ascii=False, indent=2)}
 
 [HR 전용 평가 축 및 루브릭 (references/rubric_hr.json)]
 {hr_rubric}
@@ -104,9 +134,10 @@ def main():
 3. 축 C 신입 엔지니어링 5대 완수 인정: 상용 프로덕션뿐만 아니라, ① 실사용자 배포 & 피드백 루프, ② 극한의 가용 자원 제약 환경 극복, ③ 가상 부하 및 벤치마크 스트레스 테스트, ④ 커스텀 Linter/CI 도구화, ⑤ 데이터 및 상태 불일치 무결성 선제 방어, 또는 독립 피어 검증(Star 100+ PR, 논문 등) 중 1개라도 실증되면 5점 만점 인정.
 4. 축 H CS Safe Harbor & 축 J 근거 무결성: 지원자 본인만의 구체적 문제 현상, 재현 조건, 시스템 내부 동작 원리(OS/네트워크/DB/런타임/렌더링 등) 기반의 대체 불가능한 실전 팩트 서술 시 회사 고유명사 없어도 H축 5점 보장 (단, 단순 교과서 이론 나열 제외). 측정 근거 없는 가짜 수치 날조나 본문 내 서사 모순은 J축에서 단호히 감점하되, 사소한 오탈자 1~2개는 단순 교정 권고(INFO)로 처리하여 서사 모순 비약을 금지함.
 5. 담당업무 우선순위(Key Responsibilities) 정합도: 공고의 담당업무는 위에서부터 1순위 핵심 코어 업무입니다. 지원자가 1~2순위 핵심 코어 업무를 외면하고 3순위 이하 곁다리 업무에만 치중한 경우 D축을 Max 3점으로 엄격히 캡핑하십시오.
+6. 도메인 핵심 불변식(domain_core_invariants) 및 문체 헌법(domain_tone_directive) 대조: [공식 부서 맥락 및 공고 스펙]에 정의된 도메인 불변식과 전형 성격(예: 인턴십 가설-검증 규율, R&D 재현성, 상용 무중단 등)을 기준으로 본문의 공학적 진실성을 엄정 평가하십시오. 팩트에 명시된 1순위 핵심 과업을 충실히 수행하고 도메인 불변식을 준수한 경우 부당하게 시니어급 잣대를 들이대어 감점하지 말고 객관적 성취를 인정하십시오.
 
 [공식 부서 맥락 및 공고 스펙]
-{json.dumps(spec_data, ensure_ascii=False, indent=2)}
+{json.dumps(merged_spec, ensure_ascii=False, indent=2)}
 
 [현업 테크 리드 전용 루브릭 (references/rubric_tech.json - Typed Locked Rubric Gating)]
 {tech_rubric}
@@ -168,6 +199,8 @@ def main():
         "--tech-weight", str(args.tech_weight),
         "--spec", str(spec_path)
     ]
+    if context_path and context_path.exists():
+        grade_cmd.extend(["--context", str(context_path)])
     if args.out:
         grade_cmd.extend(["--out", str(args.out)])
 
