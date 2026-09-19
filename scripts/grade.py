@@ -777,26 +777,6 @@ def main():
         report.append(f"2. **고객사 도메인 오너십**: 담당 서비스({client_domain})의 비즈니스 규칙과 데이터 흐름을 깊이 이해하고 있음을 강조하여 '단순 외주자'가 아닌 '도메인 시스템 오너십'을 증명하십시오.")
         report.append(f"3. **엔지니어링 역량의 전이**: 지원서에서 입증한 문제 해결 팩트가 모회사({parent_entity})의 표준 엔지니어링 거버넌스에서도 재현 가능한 자산임을 강조하십시오.\n")
 
-    # 6-2. 💡 실전 면접 쐐기 앵커 및 유인구 가이드 (Bait & Defensibility Framework)
-    key_resps = context_data.get("key_responsibilities", []) or spec_data.get("key_responsibilities", [])
-
-    report.append("## 💡 [실전 면접 쐐기 앵커 & 유인구 가이드 (Bait & Defensibility Framework)]\n")
-    report.append("서류 전형의 핵심 강점(성실성/기본기 팩트)을 100% 보존하면서, 기술면접관의 킬러 질문을 지원자가 유리한 영역으로 낚아채는(Bait) 일반화된 3대 결속 원칙을 제공합니다.\n")
-    if key_resps:
-        report.append("- **[공고 주요 담당업무 풀 (Job Responsibilities Pool)]**:")
-        for idx, resp in enumerate(key_resps[:3], 1):
-            report.append(f"  - 과업 {idx}: {resp}")
-    else:
-        report.append("- **[공고 주요 담당업무 풀 (Job Responsibilities Pool)]**: 공고 핵심 과업")
-    report.append("\n- **[3대 신입 조작적 온보딩 행위 (Actionable Primitives)]**:")
-    report.append("  1. **[도메인 독해 (Read)]**: 기존 시스템의 입출력 데이터 흐름도(Data Flow) 도식화 및 선배 대조")
-    report.append("  2. **[원인 추적 (Trace)]**: 로그 및 실행 계획(Execution Plan) 역추적을 통한 병목 특정")
-    report.append("  3. **[검증 자동화 (Verify)]**: 수작업 점검/대사 절차의 단순 스크립트화로 휴먼 에러 선제 방어\n")
-    report.append("### 🎯 [면접관 유인구(Bait) 대응 표준 템플릿]")
-    primary_task = key_resps[0] if key_resps else "공고 핵심 과업"
-    report.append("면접관이 '자소서에 쓴 내용으로 우리 팀 과업을 어떻게 수행할 것인가?'를 압박할 때 문항별 타깃 과업과 아래 인과관계로 역공하십시오:")
-    report.append(f"> *\"지원서에서 입증한 본인의 실제 문제해결 팩트(Fact Provenance)를 바탕으로, 해당 과업({primary_task} 등)에 임할 때 과시적 재작성을 시도하지 않고 [도메인 흐름도 독해 ➔ 로그/실행계획 추적 ➔ 검증 자동화]의 조작적 절차를 거쳐 안정적으로 기여하겠습니다.\"*\n")
-
     # 7. 문항별 세부 평가 리포트
     report.append("## 7. 문항별 상세 평가 내역\n")
     for qid in q_ids:
