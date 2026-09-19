@@ -5,7 +5,7 @@ Local-First Sovereign Architecture:
 Step 4(기계 린트) ➔ Step 5(평가 패킷 생성 or 2인 채점 집계) ➔ 최종 리포트 출력을 단번에 체이닝합니다.
 """
 
-import sys, os, json, subprocess, argparse
+import sys, os, json, subprocess, argparse, re
 from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -15,6 +15,51 @@ REFS_DIR = BASE_DIR / "references"
 def run_cmd(cmd):
     result = subprocess.run(cmd, capture_output=True, text=True)
     return result.returncode, result.stdout, result.stderr
+
+JUDICIAL_STEERING_PATTERNS = [
+    r'(감점하지\s*말|부당하게\s*요구하지|평가할\s*것|높이\s*평가|최우선으로\s*평가)',
+    r'(인정할\s*것|봐줘|유효하게\s*연결|우대할|면제할|잣대를\s*들이대지)',
+    r'(평가\s*헌법|인재상으로\s*인정|높은\s*평가를\s*줄)'
+]
+
+def audit_context_integrity(context_data):
+    """context.json 내 평가 지침 및 사법 사주 오염을 기계적으로 적발"""
+    raw_str = json.dumps(context_data, ensure_ascii=False)
+    for pat in JUDICIAL_STEERING_PATTERNS:
+        m = re.search(pat, raw_str)
+        if m:
+            print(f"❌ [CRITICAL CONTEXT CONTAMINATION] context.json 내 사법 사주 오염 문구 적발: '{m.group(0)}'")
+            print("도메인 컨텍스트에는 순수 시스템 기술 팩트와 정형 Enum만 허용됩니다.")
+            print("평가 지침이나 면제 사주는 엄격히 금지됩니다. 파이프라인을 중단합니다.")
+            sys.exit(1)
+
+SENIORITY_RUBRIC_MATRIX = {
+    "CONVERTIBLE_INTERN": {
+        "track_name": "채용연계형 인턴",
+        "evaluation_directive": (
+            "[공식 채용 트랙 공학 평가 헌법 (Seniority Tier: CONVERTIBLE_INTERN)]\n"
+            "1. 본 평가는 [채용연계형 인턴] 전형입니다.\n"
+            "2. 축 C/D 평가 기준: 가설-검증 기반 원인 좁히기 규율(대조군 설정, 정량 지표 개선 등)과 공고 최상위 1순위 과업 정합 시 5점을 인정하십시오.\n"
+            "3. 부당 감점 금지: 상용 임베디드 저수준 HAL 드라이버 직접 설계나 실차 양산 릴리즈 등 경력직 전용 요건은 본 전형의 감점 사유가 아니며, 이를 이유로 감점할 시 사법 감사에서 기각됩니다."
+        )
+    },
+    "NEW_GRAD": {
+        "track_name": "신입 공채",
+        "evaluation_directive": (
+            "[공식 채용 트랙 공학 평가 헌법 (Seniority Tier: NEW_GRAD)]\n"
+            "1. 본 평가는 [신입 공채] 전형입니다.\n"
+            "2. 축 C/D 평가 기준: 단일 완성 프로젝트 아키텍처 및 신입 5대 완수 앵커(실사용자 배포, 자원 제약 극복, Linter/CI 도구화 등)와 최상위 1~2순위 코어 과업 정합 시 5점을 인정하십시오."
+        )
+    },
+    "EXPERIENCED": {
+        "track_name": "경력직",
+        "evaluation_directive": (
+            "[공식 채용 트랙 공학 평가 헌법 (Seniority Tier: EXPERIENCED)]\n"
+            "1. 본 평가는 [경력직] 전형입니다.\n"
+            "2. 축 C/D 평가 기준: 상용 프로덕션 대규모 트래픽 무중단 운영, 아키텍처 전면 설계, 비즈니스 장애 완수 리스크 책임을 엄격하게 검증하십시오."
+        )
+    }
+}
 
 def main():
     parser = argparse.ArgumentParser(description="jaso-pipeline v3.7 E2E 원클릭 드라이버")
@@ -56,6 +101,7 @@ def main():
         try:
             context_data = json.loads(context_path.read_text(encoding="utf-8"))
             print(f"📦 [Context Auto-Merge] 컨텍스트 파일 감지 및 병합: {context_path.name}")
+            audit_context_integrity(context_data)
         except Exception as e:
             print(f"⚠️ [주의] context.json 로드 실패: {e}")
 
@@ -124,6 +170,10 @@ def main():
         hr_packet_path.write_text(hr_prompt, encoding="utf-8")
 
         # 2. Tech Lead Packet (Red Teamer 결함 추궁 가드레일 내재화)
+        recruitment_track = merged_spec.get("recruitment_track_type", "NEW_GRAD")
+        seniority_entry = SENIORITY_RUBRIC_MATRIX.get(recruitment_track, SENIORITY_RUBRIC_MATRIX["NEW_GRAD"])
+        seniority_block = seniority_entry["evaluation_directive"]
+
         tech_packet_path = packets_dir / "tech_prompt_packet.txt"
         tech_prompt = f"""당신은 지원 부서의 현업 테크 리드(Principal Engineer)이자 엄격한 시니어 레드팀(Red Teamer)으로서 완전히 독립된 기술 블라인드 채점을 수행합니다.
 작성 대화 맥락, 온정주의, 칭찬은 일체 배제하고, 오직 엔지니어링 진실성, 'So What?' 3단계 결함 추궁, 그리고 Typed Locked Rubric 관점에서 냉정하게 평가하십시오.
@@ -133,8 +183,9 @@ def main():
 2. Typed Locked Rubric 집행: 기술 프로젝트 문항은 Type_A~E 중 하나를 선언하고 필수 증거 결여 시 Max 3점 캡핑. (단, 지원동기, 포부, 인성 문항은 버린 대안 및 유형 강제 면제/EXEMPT).
 3. 축 C 신입 엔지니어링 5대 완수 인정: 상용 프로덕션뿐만 아니라, ① 실사용자 배포 & 피드백 루프, ② 극한의 가용 자원 제약 환경 극복, ③ 가상 부하 및 벤치마크 스트레스 테스트, ④ 커스텀 Linter/CI 도구화, ⑤ 데이터 및 상태 불일치 무결성 선제 방어, 또는 독립 피어 검증(Star 100+ PR, 논문 등) 중 1개라도 실증되면 5점 만점 인정.
 4. 축 H CS Safe Harbor & 축 J 근거 무결성: 지원자 본인만의 구체적 문제 현상, 재현 조건, 시스템 내부 동작 원리(OS/네트워크/DB/런타임/렌더링 등) 기반의 대체 불가능한 실전 팩트 서술 시 회사 고유명사 없어도 H축 5점 보장 (단, 단순 교과서 이론 나열 제외). 측정 근거 없는 가짜 수치 날조나 본문 내 서사 모순은 J축에서 단호히 감점하되, 사소한 오탈자 1~2개는 단순 교정 권고(INFO)로 처리하여 서사 모순 비약을 금지함.
-5. 담당업무 우선순위(Key Responsibilities) 정합도: 공고의 담당업무는 위에서부터 1순위 핵심 코어 업무입니다. 지원자가 1~2순위 핵심 코어 업무를 외면하고 3순위 이하 곁다리 업무에만 치중한 경우 D축을 Max 3점으로 엄격히 캡핑하십시오.
-6. 도메인 핵심 불변식(domain_core_invariants) 및 문체 헌법(domain_tone_directive) 대조: [공식 부서 맥락 및 공고 스펙]에 정의된 도메인 불변식과 전형 성격(예: 인턴십 가설-검증 규율, R&D 재현성, 상용 무중단 등)을 기준으로 본문의 공학적 진실성을 엄정 평가하십시오. 팩트에 명시된 1순위 핵심 과업을 충실히 수행하고 도메인 불변식을 준수한 경우 부당하게 시니어급 잣대를 들이대어 감점하지 말고 객관적 성취를 인정하십시오.
+5. 담당업무 우선순위(Key Responsibilities) 정합도: 공고의 담당업무는 상단 순서(Top-Heavy)가 기본 Core Mission입니다. 지원자가 상위 1~2순위 핵심 코어 업무(또는 Layer 2/3 시스템 치명도 직결 과업)를 외면하고 3순위 이하 곁다리 업무에만 치중한 경우 D축을 Max 3점으로 엄격히 캡핑하십시오.
+
+{seniority_block}
 
 [공식 부서 맥락 및 공고 스펙]
 {json.dumps(merged_spec, ensure_ascii=False, indent=2)}
