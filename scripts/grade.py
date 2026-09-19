@@ -102,10 +102,10 @@ def audit_type_rubric_gating(tech_q, full_draft_text, question_nature=None):
     sel_type = TYPE_ALIASES.get(raw_type, raw_type)
     score_b = tech_q.get("scores", {}).get("B", 0)
 
-    # 0. 비기술 문항(지원동기, 성격/가치관, 포부)은 버린 대안 3점 Clamping 면제
-    is_exempt = question_nature in ['MOTIVATION', 'VALUES', 'VISION', 'COLLABORATION'] or type_decl.get("exempt_tradeoff")
-    if is_exempt:
-        return f"ℹ️ **EXEMPT**: 비기술/지원동기 문항으로 서사 유형 게이팅 면제 적용"
+    # 0. 가치관/진로 선택 문항의 판단 근거(Decision Rationale) 검증
+    is_culture_fit = question_nature in ['CULTURE_FIT', 'MOTIVATION', 'VALUES', 'VALUE', 'PERSONALITY', 'VISION', 'COLLABORATION'] or type_decl.get("exempt_tradeoff")
+    if is_culture_fit:
+        return "ℹ️ **[판단 근거]** 가치관/진로 선택 및 태도 형성의 의사결정 인과관계와 진정성을 검증합니다."
 
     # 1. 유형 선언 누락 검사 (기존 데이터 호환: 선언 없으면 경고만)
     if not sel_type or sel_type not in ["Type_A", "Type_B", "Type_C", "Type_D", "Type_E"]:
@@ -191,12 +191,12 @@ SYSTEM_ROLE_PATTERN = re.compile(
     re.IGNORECASE
 )
 
-def audit_evidence_contracts(tech_q, full_draft_text, q_draft_text, context_data, spec_data, qid):
+def audit_evidence_contracts(tech_q, full_draft_text, q_draft_text, context_data, spec_data, qid, q_nature="TECH_CORE"):
     """
-    의미론적 증거 계약(Semantic Evidence-Contract Architecture v3.5) 감사 엔진:
+    의미론적 증거 계약(Semantic Evidence-Contract Architecture v3.6) 감사 엔진:
     1. LLM 평가관이 문맥/시제/의미론적 인과관계를 해석하여 작성한 evidence_contracts 검증.
     2. Python 감사 엔진은 제출된 인용구의 무결성(Word Bi-gram + Fuzzy Jaccard)을 검증하고 결정론적 캡핑을 집행.
-    3. 2차원 직교 아키타입 매트릭스(ENTERPRISE_SM Safe Harbor): DB정합성·연계안정성·배치무결성·운영추적성 입증 시 5점 만점 보장.
+    3. CULTURE_FIT(가치관/인성/지원동기) 문항은 시스템 아키텍처 불변식 대신 온보딩 신뢰성(Reliability & Culture-Fit)을 평가하여 D축 사법 살인(2점 클램핑)을 원천 차단.
     4. evidence_contracts 객체 부재 시 기존 정규식 기반 audit_domain_archetype_gating()으로 안전하게 폴백.
     """
     evidence_contracts = tech_q.get("evidence_contracts")
@@ -241,10 +241,19 @@ def audit_evidence_contracts(tech_q, full_draft_text, q_draft_text, context_data
         if addressed and inv_valid:
             logs.append(f"✅ **[도메인 불변식 검증 통과]** 전문 용어 부재 여부와 무관하게 문장 단위 조작적 정의({inv_type}) 및 실질적 조치 팩트가 확인되었습니다.")
         elif not addressed:
-            cur_d = tech_q.get("scores", {}).get("D", 5)
-            if archetype in ["FINTECH_CORE", "MANUFACTURING_OPS"] and cur_d > 3:
-                tech_q["scores"]["D"] = 3
-                logs.append(f"ℹ️ **[도메인 불변식 미흡]** 해당 도메인의 핵심 불변식에 대한 문장 단위 조작적 정의 부재로 D축 점수가 3점(상한)으로 조정되었습니다.")
+            # 가치관/인성 문항에서 회사/부서 언급이 존재하는 경우, 사내 시스템 미구현을 이유로 한 2점 살인을 방지하고 D축 3점(추상적 다짐 수준)으로 정상 조정
+            if q_nature == "CULTURE_FIT":
+                company = context_data.get("company", "") or spec_data.get("company", "")
+                if company and company in q_draft_text:
+                    cur_d = tech_q.get("scores", {}).get("D", 5)
+                    if cur_d < 3:
+                        tech_q["scores"]["D"] = 3
+                        logs.append("ℹ️ **[도메인 과업 정합도 정상화]** 회사/부서 언급이 확인되므로 D축을 3점(추상적 다짐 수준)으로 조정합니다 (사내 시스템 미구현 2점 결격 배제).")
+            else:
+                cur_d = tech_q.get("scores", {}).get("D", 5)
+                if archetype in ["FINTECH_CORE", "MANUFACTURING_OPS"] and cur_d > 3:
+                    tech_q["scores"]["D"] = 3
+                    logs.append(f"ℹ️ **[도메인 불변식 미흡]** 해당 도메인의 핵심 불변식에 대한 문장 단위 조작적 정의 부재로 D축 점수가 3점(상한)으로 조정되었습니다.")
 
     # 3. 도메인 정체성 괴리 (시스템/인프라 vs 웹 프론트엔드 DOM/컴포넌트)
     job_role = context_data.get("job_role", "") or spec_data.get("role", "")
@@ -267,12 +276,28 @@ def audit_evidence_contracts(tech_q, full_draft_text, q_draft_text, context_data
         resp_valid = verify_quote_fuzzy(resp_quote, full_draft_text) if resp_quote else False
 
         if focus_level in ["SUPPORT", "PERIPHERAL"]:
-            cur_d = tech_q.get("scores", {}).get("D", 5)
-            if cur_d > 3:
-                tech_q["scores"]["D"] = 3
-                logs.append("⚠️ **[담당업무 우선순위 괴리 (Max 3점 캡핑)]** 공고의 1~2순위 핵심 코어 업무(Core Mission)를 외면하고 3순위 이하 부수적/지원 업무에 치중한 서술이 확인되어 D축 점수가 3점으로 제한 집행되었습니다.")
+            if q_nature == "CULTURE_FIT":
+                logs.append("ℹ️ **[도메인 과업 정합도]** 가치관/인성 문항이므로 공고 1순위 핵심 과업 직접 구현 대신 전반적 조직 기여 및 온보딩 관점을 정상 참작합니다.")
+            else:
+                cur_d = tech_q.get("scores", {}).get("D", 5)
+                if cur_d > 3:
+                    tech_q["scores"]["D"] = 3
+                    logs.append("⚠️ **[담당업무 우선순위 괴리 (Max 3점 캡핑)]** 공고의 1~2순위 핵심 코어 업무(Core Mission)를 외면하고 3순위 이하 부수적/지원 업무에 치중한 서술이 확인되어 D축 점수가 3점으로 제한 집행되었습니다.")
         elif focus_level == "CORE" and resp_valid:
             logs.append("✅ **[담당업무 우선순위 정합 통과]** 공고의 최우선 핵심 업무(Top 1~2순위 Core Mission)를 직격하는 엔지니어링 서사가 입증되었습니다.")
+
+    # 5. CULTURE_FIT 문항에 대한 도메인 과업 정합도 정상화
+    if q_nature == "CULTURE_FIT":
+        company = context_data.get("company", "") or spec_data.get("company", "")
+        department = context_data.get("department", "") or spec_data.get("department", "")
+        client_domain = context_data.get("client_service_domain", "")
+        keywords = [k for k in [company, department, client_domain] if k]
+        has_mention = any(k in q_draft_text for k in keywords) or bool(re.search(r'(회사|팀|부서|조직|시스템)', q_draft_text))
+        if has_mention:
+            cur_d = tech_q.get("scores", {}).get("D", 5)
+            if cur_d < 3:
+                tech_q["scores"]["D"] = 3
+                logs.append("ℹ️ **[도메인 과업 정합도 정상화]** 가치관 문항에서 회사/부서 지향점 언급이 확인되므로 D축을 3점(추상적 다짐 수준)으로 정상 조정합니다 (사내 시스템 미구현 2점 결격 배제).")
 
     if logs:
         return "\n  ".join(logs)
@@ -473,8 +498,37 @@ def audit_knockout_gatekeeper(tech_data, hr_data, full_draft_text, knockout_eval
 
     return sustained_flags, dismissed_flags
 
+def resolve_question_nature(qid, q_spec, hr_q, tech_q):
+    """
+    문항 성격 계약(Question Nature Contract) 해석:
+    1. spec_data의 questions[qid]["question_nature"] 계약 우선 (SSOT).
+    2. tech_eval 또는 hr_eval 평가관이 제출한 question_nature 선언(Declaration) 차순위.
+    3. spec.json의 required_items 지시 항목명(가치관, 인성, 지원동기, 포부 등) 연동.
+    4. 테크 리드의 서사 유형 선언 연동.
+    5. 선언 부재 시 None 반환 (전역 기본 가중치로 안전하게 폴백).
+    """
+    declared = q_spec.get("question_nature") or tech_q.get("question_nature") or hr_q.get("question_nature")
+    if declared:
+        dec_upper = str(declared).upper()
+        if dec_upper in ["CULTURE_FIT", "PERSONALITY", "VALUE", "MOTIVATION", "GROWTH", "ATTITUDE"]:
+            return "CULTURE_FIT"
+        if dec_upper in ["TECH_CORE", "TECH_PROJECT", "PROJECT"]:
+            return "TECH_CORE"
+
+    # spec.json의 required_items 지시 항목명 연동
+    req_items = list(q_spec.get("required_items", {}).keys())
+    if any(k in " ".join(req_items) for k in ["가치관", "인성", "지원동기", "포부", "성장과정", "태도", "동기"]):
+        return "CULTURE_FIT"
+
+    # 테크 리드의 서사 유형 선언 연동
+    type_decl = tech_q.get("type_declaration", {})
+    if type_decl.get("exempt_tradeoff") or type_decl.get("selected_narrative_type") in ["EXEMPT", "NONE", "NON_TECH", "CULTURE"]:
+        return "CULTURE_FIT"
+
+    return None
+
 def main():
-    parser = argparse.ArgumentParser(description="자소서 2인 독립 검증 사후 집계기 (grade.py v3.4)")
+    parser = argparse.ArgumentParser(description="자소서 2인 독립 검증 사후 집계기 (grade.py v3.7)")
     parser.add_argument("draft", help="초안 텍스트 파일 경로 (===1=== 구분자)")
     parser.add_argument("hr_eval", help="HR 평가 결과 JSON 파일 경로")
     parser.add_argument("tech_eval", help="테크 리드 평가 결과 JSON 파일 경로")
@@ -507,8 +561,8 @@ def main():
     w_tech = args.tech_weight / total_w
 
     report = []
-    report.append("# 📊 자소서 2인 독립 검증 결과 종합 리포트 (jaso-pipeline v3.4)")
-    report.append(f"- **가중치 반영 비율**: HR 인사담당자 {w_hr*100:.0f}% : 현업 테크 리드 {w_tech*100:.0f}%")
+    report.append("# 📊 자소서 2인 독립 검증 결과 종합 리포트 (jaso-pipeline v3.7)")
+    report.append(f"- **가중치 반영 비율**: HR 인사담당자 {w_hr*100:.0f}% : 현업 테크 리드 {w_tech*100:.0f}% (A~J 10개 축 직교 평가 및 도메인 과업 정합도)")
     report.append("- **평가 원칙**: 산술 연산 배제, Typed Locked Rubric 적용, 환각 인용 점수 롤백(Rollback), Word Bi-gram 인용구 감사\n")
 
     q_ids = sorted(list(set(list(draft.keys()) + list(hr_data.get("questions", {}).keys()))))
@@ -528,7 +582,7 @@ def main():
         hr_q = hr_data.get("questions", {}).get(qid, {})
         tech_q = tech_data.get("questions", {}).get(qid, {})
         q_spec = spec_data.get("questions", {}).get(qid, {})
-        q_nature = q_spec.get("question_nature") or tech_q.get("question_nature") or hr_q.get("question_nature")
+        q_nature = resolve_question_nature(qid, q_spec, hr_q, tech_q)
 
         # 1. 문항별 인용구 무결성 검증 (Word Bi-gram + Token Jaccard)
         hr_quotes = hr_q.get("quotes", [])
@@ -573,8 +627,8 @@ def main():
         if c_audit_log:
             type_audit_logs.append(f"- [문항 {qid} C축] {c_audit_log}")
 
-        # D축 채용 아키타입 및 의미론적 증거 계약(Semantic Evidence Contract) 감사
-        d_audit_log = audit_evidence_contracts(tech_q, full_draft_text, q_draft_text, context_data, spec_data, qid)
+        # D축 채용 아키타입 및 의미론적 증거 계약(Semantic Evidence Contract) 감사 (q_nature 바인딩)
+        d_audit_log = audit_evidence_contracts(tech_q, full_draft_text, q_draft_text, context_data, spec_data, qid, q_nature=q_nature)
         if "D" in tech_q.get("scores", {}):
             tech_axes["D"] = tech_q["scores"]["D"]
         if d_audit_log:
@@ -637,7 +691,7 @@ def main():
         report.append(f"> 🚨 **[Knockout Red Flag 결격 사유 스크리닝 발동: {final_verdict}]**")
         report.append(f"> 서류 컷오프 결격 사유 {len(sustained_flags)}건 확인으로 인해, 선형 가중합({raw_avg_final:.1f}점)이 제한되고 **최종 {final_clamped_score:.1f}점 (Max {clamp_limit:.1f}점 Hard Clamped)**으로 상한 캡핑되었습니다.\n")
 
-    report.append("| 문항 | HR 점수 (40%) | 테크 리드 점수 (60%) | 가중 종합 점수 |")
+    report.append(f"| 문항 | HR 점수 ({w_hr*100:.0f}%) | 테크 리드 점수 ({w_tech*100:.0f}%) | 가중 종합 점수 |")
     report.append("| :--- | :---: | :---: | :---: |")
     for r in table_rows:
         report.append(r)
@@ -722,6 +776,26 @@ def main():
         report.append(f"1. **조직 정체성 일치**: 채용 주체({parent_entity})와 실제 담당 도메인({client_domain})의 위탁·운영 관계를 명확히 인지하고, 시스템의 지속적 안정성과 비즈니스 연속성을 지켜내는 엔지니어링 책임감을 어필하십시오.")
         report.append(f"2. **고객사 도메인 오너십**: 담당 서비스({client_domain})의 비즈니스 규칙과 데이터 흐름을 깊이 이해하고 있음을 강조하여 '단순 외주자'가 아닌 '도메인 시스템 오너십'을 증명하십시오.")
         report.append(f"3. **엔지니어링 역량의 전이**: 지원서에서 입증한 문제 해결 팩트가 모회사({parent_entity})의 표준 엔지니어링 거버넌스에서도 재현 가능한 자산임을 강조하십시오.\n")
+
+    # 6-2. 💡 실전 면접 쐐기 앵커 및 유인구 가이드 (Bait & Defensibility Framework)
+    key_resps = context_data.get("key_responsibilities", []) or spec_data.get("key_responsibilities", [])
+
+    report.append("## 💡 [실전 면접 쐐기 앵커 & 유인구 가이드 (Bait & Defensibility Framework)]\n")
+    report.append("서류 전형의 핵심 강점(성실성/기본기 팩트)을 100% 보존하면서, 기술면접관의 킬러 질문을 지원자가 유리한 영역으로 낚아채는(Bait) 일반화된 3대 결속 원칙을 제공합니다.\n")
+    if key_resps:
+        report.append("- **[공고 주요 담당업무 풀 (Job Responsibilities Pool)]**:")
+        for idx, resp in enumerate(key_resps[:3], 1):
+            report.append(f"  - 과업 {idx}: {resp}")
+    else:
+        report.append("- **[공고 주요 담당업무 풀 (Job Responsibilities Pool)]**: 공고 핵심 과업")
+    report.append("\n- **[3대 신입 조작적 온보딩 행위 (Actionable Primitives)]**:")
+    report.append("  1. **[도메인 독해 (Read)]**: 기존 시스템의 입출력 데이터 흐름도(Data Flow) 도식화 및 선배 대조")
+    report.append("  2. **[원인 추적 (Trace)]**: 로그 및 실행 계획(Execution Plan) 역추적을 통한 병목 특정")
+    report.append("  3. **[검증 자동화 (Verify)]**: 수작업 점검/대사 절차의 단순 스크립트화로 휴먼 에러 선제 방어\n")
+    report.append("### 🎯 [면접관 유인구(Bait) 대응 표준 템플릿]")
+    primary_task = key_resps[0] if key_resps else "공고 핵심 과업"
+    report.append("면접관이 '자소서에 쓴 내용으로 우리 팀 과업을 어떻게 수행할 것인가?'를 압박할 때 문항별 타깃 과업과 아래 인과관계로 역공하십시오:")
+    report.append(f"> *\"지원서에서 입증한 본인의 실제 문제해결 팩트(Fact Provenance)를 바탕으로, 해당 과업({primary_task} 등)에 임할 때 과시적 재작성을 시도하지 않고 [도메인 흐름도 독해 ➔ 로그/실행계획 추적 ➔ 검증 자동화]의 조작적 절차를 거쳐 안정적으로 기여하겠습니다.\"*\n")
 
     # 7. 문항별 세부 평가 리포트
     report.append("## 7. 문항별 상세 평가 내역\n")
