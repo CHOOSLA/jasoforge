@@ -168,26 +168,32 @@ flowchart TD
         E2 -- PASS --> E4
     end
 
-    %% Step 5: 2단계 검사-판사 독립 채점 (Prosecutor-Judge Architecture)
-    subgraph S5 ["Step 5. 2단계 검사-판사 사법 채점 (Prosecutor-Judge Architecture v3.4)"]
-        F1["독립 서브에이전트 병렬 격리 호출<br/>(작성 의도 · 이전 대화 컨텍스트 완전 격리)"]
-        F2["5대 입력 패킷 수신:<br/>[1. spec.json + 2. context.json + 3. 헌법 루브릭 + 4. draft.txt + 5. lint 리포트]"]
+    %% Step 5: 2단계 검사-판사 사법 채점 (Anti-Sycophancy Air-Gap Firewall)
+    subgraph S5 ["Step 5. 2단계 검사-판사 사법 채점 (Prosecutor-Judge Architecture v3.7 / Anti-Sycophancy Air-Gap)"]
+        direction TB
 
-        DYNAMIC_INJECT["⚡ 동적 페르소나 주입기 (Dynamic Context Injector)<br/>• 회사: {context.company}<br/>• 부서/직무: {context.department} / {context.job_role}<br/>• 평가 기준 엣지케이스: {context.layer3_job_edge_cases}"]
+        subgraph S5_ISOLATION ["🛡️ [컨텍스트 무균실 방화벽 (컨텍스트 완전 격리 Prompt Air-Gap Firewall)]"]
+            CHAT_CTX["❌ 메인 대화 컨텍스트 차단<br/>(사용자 중간 발화·'봐줘라'·메인 에이전트 산문 작문 전면 금지)"]
+            PACKET_GEN["⚙️ 결정론적 패킷 조립기 & 동적 페르소나 주입기 (scripts/run_pipeline.py)<br/>• spec.json + context.json + rubric.json + draft.txt + lint 결과<br/>• 회사: {context.company} | 직무: {context.job_role} | 엣지케이스: {context.layer3_job_edge_cases}"]
+            CLEAN_CALL["🔒 정적 단일 파일 포인터 호출 (Static Packet Pointer Only)<br/>• Prompt: '{packet_path} 파일을 읽고 평가를 수행하여 {out_path}에 저장'"]
+            
+            PACKET_GEN ==> CLEAN_CALL
+            CHAT_CTX -.->|물리적 주입 차단 (Firewall)| CLEAN_CALL
+        end
 
-        subgraph S5_P1 ["⚖️ [Phase 1: 기소 단계] 2대 레드팀 검사 (점수 부여 절대 금지)"]
+        subgraph S5_P1 ["⚖️ [Phase 1: 기소 단계] 2대 무균실 독립 검사 (점수 부여 절대 금지)"]
             direction TB
             subgraph AG1_BOX ["🧑‍💼 HR 공격 검사 (HR Prosecutor - 40%)"]
                 AG1["규격 위반, 지시문 이탈, 클리셰, 가치관 비행동화 혐의 기소<br/>• A. 상황 설명 비중 (≤30% 지면 최적화)<br/>• E. 질문 본질 의도 & 플로우 일치<br/>• F. 작성방법 항목 전수 충족<br/>• G. 글자수 규격 준수 ({spec.max_chars} 상한 대조)<br/>• I. 요구 추상화 레벨 & 가치관 지속성"]
             end
             subgraph AG2_BOX ["🧑‍💻 현업 테크 리드 검사 (Tech Prosecutor - 60%)"]
-                AG2["기술 허점, 샌드박스 한계, 도메인 엣지케이스 이탈 혐의 기소<br/>• B. 서사 유형별 잠금 앵커 (Type_A/B/C Gating & 조각모음 배제)<br/>• C. 완수 과정 & 리스크 책임 (상용 프로덕션 vs 학술 샌드박스)<br/>• D. 부서 엣지 케이스 ({context.layer3_job_edge_cases} 미관통 혐의)<br/>• H. 고유성 (치환 불가 사실 앵커)<br/>• J. 근거 무결성 & 서사 일관성<br/>• 🛡️ 시니어 레드팀 관점 (3단계 So What 추궁)<br/>• 실전 기술면접 킬러 꼬리질문 3선 도출"]
+                AG2["기술 허점, 얕은 구현, 도메인 엣지케이스 이탈 혐의 기소<br/>• B. 서사 유형별 잠금 앵커 (Type_A~E 결단 기제 증명)<br/>• C. 완수 과정 & 리스크 책임 (신입 5대 완수 앵커 & 피어 검증)<br/>• D. 부서 엣지 케이스 및 과업 정합도 ({context.key_responsibilities}, {context.layer3_job_edge_cases})<br/>• H. 고유성 (치환 불가 사실 앵커)<br/>• J. 근거 무결성 & 서사 일관성<br/>• 🛡️ 시니어 레드팀 3단계 'So What?' 추궁<br/>• 실전 기술면접 킬러 꼬리질문 3선 도출"]
             end
         end
 
         subgraph S5_P2 ["⚖️ [Phase 2: 판결 단계] 메타 감사관 & 결정론적 판사 (Meta-Judge Engine)"]
             direction TB
-            F3["사후 기계 감사 & 판결 (scripts/grade.py v3.4)<br/>• ① 인용구 실존 감사 (Fuzzy Jaccard Overlap) ➔ 허위/환각 기소 기각<br/>• ② 시니어 억지 트집 기각 vs 실질 결함 채택 (Fair Assessment)<br/>• ③ 방어 불가능 결함 1건당 헌법적 루브릭(1~5점) 결정론적 감점 선고"]
+            F3["사후 기계 감사 & 판결 (scripts/grade.py v3.7)<br/>• ① 인용구 실존 감사 (Fuzzy Jaccard Overlap) ➔ 허위 기소 즉시 기각<br/>• ② 시니어 억지 트집 기각 vs 실질 결함 채택 (Fair Assessment)<br/>• ③ 헌법적 루브릭(1~5점) 결정론적 집계 (아첨성 가짜 점수 롤백)"]
 
             F3_GATE{"🚨 Knockout Red Flag 사법 게이트<br/>(자아과잉 · 오탈자 3건 이상 · 조각모음 중<br/>SUSTAINED 채택이 1건이라도 있는가?)"}
 
@@ -195,14 +201,17 @@ flowchart TD
 
             F3_NORMAL["✅ [정상 가중 합산 (Normal Weighted)]<br/>• HR(40%) + Tech(60%) 정밀 10개 축 합산<br/>• 90~100점대 정상 선형 랭킹 산출<br/>• 최종 판정: PASS (합격권 선고)"]
 
-            F3_REPORT["최종 사법 판결문 & 면접 방어 전략 리포트 출력"]
+            F3_REPORT["📢 최종 사용자 5단 진단 리포트 브리핑 출력<br/>(점수표 ➔ 린트 ➔ 결함대조 ➔ 킬러질문 ➔ 4대역질문)"]
 
             F3 --> F3_GATE
             F3_GATE -- "예 (치명적 결함 적발: 탈락본)" --> F3_CLAMP --> F3_REPORT
             F3_GATE -- "아니오 (ALL CLEAR: 합격본)" --> F3_NORMAL --> F3_REPORT
         end
 
-        F1 --> F2 --> DYNAMIC_INJECT --> S5_P1 --> S5_P2
+        CLEAN_CALL ==> AG1_BOX
+        CLEAN_CALL ==> AG2_BOX
+        AG1_BOX ==> F3
+        AG2_BOX ==> F3
     end
 
     %% 전 단계 E2E 동적 바인딩 파이프라인 연결 (Shift-Left)
@@ -212,10 +221,10 @@ flowchart TD
     A4 ==>|4. Step 3: 도메인 문체 헌법 파이프| D5
     D6 ==>|5. Step 3➔4: draft.json SSOT 및 문항분할 단언| E1
     A4 ==>|6. Step 4: 바이트계량·블라인드규격 파이프| E1
-    A4 ==>|7. Step 5: 도메인불변식·R&D5점앵커·5대서사 파이프| DYNAMIC_INJECT
+    A4 ==>|7. Step 5: 도메인불변식·R&D5점앵커·5대서사 파이프| PACKET_GEN
     A4 ==>|8. Step 6/8: 복합네임스페이스 파이프| G1
     F3_REPORT ==>|9. Step 7: 원장 Append-Only 격리 환류 파이프| D1
-    B_LOCAL -.->|동적 컨텍스트 파이프| F2
+    B_LOCAL -.->|동적 컨텍스트 파이프| PACKET_GEN
 
     %% Step 6: 회귀 방지 & 점수 원장 기록
     subgraph S6 ["Step 6. 회귀 방지 & 점수 원장 기록 (score_ledger)"]
@@ -436,6 +445,8 @@ python3 scripts/lint.py <draft.txt> <spec.json>
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
+- **서브에이전트 컨텍스트 무균실 방화벽 (Prompt Air-Gap Firewall)**:
+  메인 에이전트가 `invoke_subagent`를 호출할 때 대화창의 중간 발화("인턴이니까 봐줘라" 등)나 자의적인 변명 산문을 주입하는 행위(Answer-Steering / Prompt Contamination)를 원천 차단합니다. 메인 에이전트의 `Prompt` 인자는 오직 `"{packet_path} 파일을 읽고 단독 사법 평가를 수행하여 {out_path}에 유효한 JSON으로 저장하십시오."` 단 한 줄의 정적 포인터로만 제한되며, 서브에이전트는 `scripts/run_pipeline.py`가 생성한 무균실 팩트 패킷 파일 외에 메인 대화 컨텍스트를 일체 열람할 수 없습니다.
 - **동적 컨텍스트 바인딩 (Dynamic Context Binding - 하드코딩 영구 금지)**:
   채점관의 페르소나는 어떠한 경우에도 하드코딩되지 않으며, 오직 Step 0에서 생성된 `context.json`의 팩트(`{context.company}`, `{context.department}`, `{context.job_role}`, `{context.edge_cases}`)를 100% 동적으로 주입받아 검사 및 판사의 평가 기준을 구성합니다.
 - **점수 산출 권한 박탈 및 결정론적 하드 클램프**:
