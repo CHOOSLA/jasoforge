@@ -397,7 +397,7 @@ KNOCKOUT_FLAG_PATTERNS = {
     "FLAG_LAUNDRY_LIST": {
         "name": "Flag 3: 무관한 프로젝트 조각모음 나열",
         "desc": "단일 아키텍처 인과관계 없이 4~6개 이상의 별개 프로젝트를 1개 문항 안에 백화점식으로 나열하여 깊이 상실",
-        "keywords": ["조각모음", "백화점식", "나열", "파편화", "Laundry list", "독소 2"]
+        "keywords": ["조각모음", "백화점식", "프로젝트 나열", "경험 파편화", "서사 파편화", "Laundry list"]
     }
 }
 
@@ -483,11 +483,12 @@ def audit_knockout_gatekeeper(tech_data, hr_data, full_draft_text, knockout_eval
     min_b_score = min([q.get("scores", {}).get("B", 5) for q in tech_data.get("questions", {}).values()] or [5])
     # 본문 내 다중 프로젝트(MFC, MobileNet, SSL Pinning, 캠핑카, 분산) 동시 출현 검사
     multi_project_hits = [p for p in ['MFC', 'MobileNet', 'SSL Pinning', '캠핑카', '분산 클러스터'] if p in full_draft_text]
-    if (has_laundry_critique and min_b_score <= 3) or len(multi_project_hits) >= 4:
+    if (has_laundry_critique and min_b_score <= 2) or len(multi_project_hits) >= 4:
+        evidence = f"단일 문항 내 {len(multi_project_hits)}개 무관 프로젝트 조각모음 적발 (Type_C 독소 저촉)" if len(multi_project_hits) >= 2 else "심층 아키텍처 결여 및 백화점식 조각모음 나열 적발"
         sustained_flags.append({
             "key": "FLAG_LAUNDRY_LIST",
             "name": KNOCKOUT_FLAG_PATTERNS["FLAG_LAUNDRY_LIST"]["name"],
-            "evidence": f"단일 문항 내 {len(multi_project_hits)}개 무관 프로젝트 조각모음 나열 (Type_C 독소조항 저촉)"
+            "evidence": evidence
         })
     else:
         dismissed_flags.append({
