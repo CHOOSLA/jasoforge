@@ -496,7 +496,14 @@ Step 0의 단일 진실 공급원(SSOT: `context.json` & `spec.json`)은 입수�
    - 복원된 서사는 최하단 `[💡 Restored Decisions]`에 Append-Only(추가 전용) 리스트로만 누적하며 전역 승격 시 사용자 명시 컨펌(`Human-in-the-loop Gate`) 의무화.
 5. **`Semantic_Evidence_Contract` (Step 5 ➔ 기계 집계기)**:
    - LLM 테크 리드 평가관은 단순 점수 나열을 금지하고, `evidence_contracts`(`archetype_audit`, `core_invariant_audit`) 객체와 인용구를 기계 엔진에 제출.
-    - 단어 정규식의 억울한 클램핑을 방어하기 위해 문장 단위 조작적 정의(실질적인 현상-원인-방어 조치 서사) 및 실제 코드 구현/배포 극복 팩트가 실재할 경우 PASS를 선언하고, Python 엔진이 Word Bi-gram으로 인용구를 검증한 후 결정론적 게이팅을 집행.
+   - 단어 정규식의 억울한 클램핑을 방어하기 위해 문장 단위 조작적 정의(실질적인 현상-원인-방어 조치 서사) 및 실제 코드 구현/배포 극복 팩트가 실재할 경우 PASS를 선언하고, Python 엔진이 Word Bi-gram으로 인용구를 검증한 후 결정론적 게이팅을 집행.
+6. **`Session_Isolation_And_Unique_Run_Dir_Contract` (Step 4/5 ➔ 격리 런타임)**:
+   - `scratch/` 전역 공용 폴더 덮어쓰기 영구 폐기.
+   - 매 파이프라인 실행마다 타임스탬프 및 UUID 기반의 유니크한 격리 디렉토리(`scratch/runs/<run_id>/packets/`)를 생성하여 타 세션 및 과거 작업과의 데이터 간섭·충돌 원천 차단.
+7. **`Draft_Content_Hash_Lock_Contract` (Step 5 ➔ 파이프라인 드라이버)**:
+   - 과거 세션의 평가 캐시(`hr_eval.json`, `tech_eval.json`)를 재탕하여 실시간 독립 채점을 우회하거나 본문 수정 후 점수를 날조하는 행위 방지.
+   - 패킷 생성 시 `draft.txt`의 SHA-256 해시를 `session_token.json`에 기록하며, 집계 실행 시 현재 초안 해시와 대조하여 불일치(본문 수정 감지) 시 `run_pipeline.py`가 즉시 `sys.exit(1)` Hard Fail 집행.
+   - 본문 해시가 일치할 경우 시간 경과와 무관하게 정당한 평가로 인정하되, 24시간 이상 경과 시에만 정보성 알림 제공. 단순 디버깅 목적의 명시적 `--allow-stale` 플래그 지원.
 
 #### 1. 📊 채점 루브릭 헌법: A~J 10개 공통 축 감점 기준표 (신입 눈높이 3대 사법 패널 합의판)
 | 축 | 평가 항목 | 구체적 감점 기준 |

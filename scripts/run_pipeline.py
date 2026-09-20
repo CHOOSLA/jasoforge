@@ -5,7 +5,8 @@ Local-First Sovereign Architecture:
 Step 4(기계 린트) ➔ Step 5(평가 패킷 생성 or 2인 채점 집계) ➔ 최종 리포트 출력을 단번에 체이닝합니다.
 """
 
-import sys, os, json, subprocess, argparse, re
+import sys, os, json, subprocess, argparse, re, time, uuid
+from datetime import datetime
 from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -32,6 +33,64 @@ def audit_context_integrity(context_data):
             print("도메인 컨텍스트에는 순수 시스템 기술 팩트와 정형 Enum만 허용됩니다.")
             print("평가 지침이나 면제 사주는 엄격히 금지됩니다. 파이프라인을 중단합니다.")
             sys.exit(1)
+
+def compute_file_hash(path):
+    """파일 내용의 SHA-256 해시 앞 16자리 계산 (공백 정규화)"""
+    try:
+        content = Path(path).read_text(encoding="utf-8").strip()
+        import hashlib
+        return hashlib.sha256(content.encode("utf-8")).hexdigest()[:16]
+    except Exception:
+        return None
+
+def verify_evaluation_integrity(hr_eval_path, tech_eval_path, draft_path, allow_mismatch=False):
+    """Draft Content Hash Lock: 초안 내용 변경 시 과거 평가 캐시 재사용 Hard Fail"""
+    for eval_name, eval_path in [("HR 평가", hr_eval_path), ("Tech Lead 평가", tech_eval_path)]:
+        if not eval_path.exists():
+            print(f"❌ [에러] {eval_name} 파일이 존재하지 않습니다: {eval_path}")
+            sys.exit(1)
+
+    current_draft_hash = compute_file_hash(draft_path)
+
+    # 1. 평가 파일과 동일 디렉토리 또는 상위 디렉토리의 session_token.json 탐색
+    token_candidates = [
+        hr_eval_path.parent / "session_token.json",
+        hr_eval_path.parent.parent / "session_token.json",
+        tech_eval_path.parent / "session_token.json"
+    ]
+    token_data = None
+    for cand in token_candidates:
+        if cand.exists():
+            try:
+                token_data = json.loads(cand.read_text(encoding="utf-8"))
+                break
+            except Exception:
+                pass
+
+    if token_data and "draft_hash" in token_data:
+        saved_hash = token_data["draft_hash"]
+        if saved_hash and current_draft_hash and saved_hash != current_draft_hash:
+            if allow_mismatch:
+                print(f"⚠️ [DRAFT HASH MISMATCH ALLOWED] 초안 본문 해시 불일치({saved_hash} != {current_draft_hash})가 --allow-stale에 의해 허용되었습니다.")
+            else:
+                print("=" * 60)
+                print("❌ [DRAFT CONTENT MISMATCH] 초안 본문 변경 감지! 과거 평가 재사용 차단")
+                print(f"   • 평가 당시 초안 해시: {saved_hash}")
+                print(f"   • 현재 대상 초안 해시: {current_draft_hash}")
+                print("   🚨 초안 내용이 수정되었으나, 이전 초안으로 채점된 과거 평가 JSON을 재사용하려 했습니다.")
+                print("   [해결책]:")
+                print("   1. 수정된 초안에 맞추어 독립 채점 서브에이전트(Step 5)를 새로 실행하십시오.")
+                print("   2. 단순 디버깅 및 회고 목적이라면 --allow-stale 플래그를 명시하십시오.")
+                print("=" * 60)
+                sys.exit(1)
+        else:
+            print(f"🔒 [Draft Hash Verified] 초안 본문 무결성 확인 완료 (Hash: {current_draft_hash})")
+
+    # 2. 24시간 이상 경과 안내 (정보성 알림, Hard Fail 아님)
+    now = time.time()
+    hr_age = now - os.path.getmtime(hr_eval_path)
+    if hr_age > 86400:
+        print(f"ℹ️ [INFO] 평가 파일이 생성된 지 24시간 이상 경과했습니다 ({int(hr_age // 3600)}시간 전 생성).")
 
 SENIORITY_RUBRIC_MATRIX = {
     "CONVERTIBLE_INTERN": {
@@ -68,7 +127,9 @@ def main():
     parser.add_argument("--context", help="기업/직무 컨텍스트 JSON 파일 (선택, 미지정 시 spec/draft 부모 폴더 자동 탐색)")
     parser.add_argument("--hr-eval", help="HR 평가 결과 JSON 파일 (선택)")
     parser.add_argument("--tech-eval", help="테크 리드 평가 결과 JSON 파일 (선택)")
-    parser.add_argument("--out-packets-dir", default="scratch/packets", help="평가 패킷 저장 폴더 (기본: scratch/packets)")
+    parser.add_argument("--run-id", help="실행 격리 세션 ID (선택, 미지정 시 타임스탬프+UUID 기반 자동 생성)")
+    parser.add_argument("--out-packets-dir", help="평가 패킷 저장 폴더 (선택, 기본: scratch/runs/<run_id>/packets)")
+    parser.add_argument("--allow-stale", action="store_true", help="오래된(5분 초과) 평가 캐시 파일 재사용 허용 (디버깅용)")
     parser.add_argument("--out", help="최종 마크다운 리포트 저장 파일 (선택)")
     parser.add_argument("--hr-weight", type=float, default=0.4, help="HR 가중치 (기본: 0.4)")
     parser.add_argument("--tech-weight", type=float, default=0.6, help="테크 리드 가중치 (기본: 0.6)")
@@ -83,6 +144,13 @@ def main():
     if not spec_path.exists():
         print(f"❌ [에러] 스펙 파일이 존재하지 않습니다: {spec_path}")
         sys.exit(1)
+
+    # 세션 격리 ID 및 패킷 디렉토리 설정 (Session Isolation)
+    run_id = args.run_id or f"run_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{uuid.uuid4().hex[:8]}"
+    if args.out_packets_dir:
+        packets_dir = Path(args.out_packets_dir).resolve()
+    else:
+        packets_dir = BASE_DIR / "scratch" / "runs" / run_id / "packets"
 
     # context.json 탐색 및 로드 (명시 인자 우선, 없으면 spec 또는 draft 동위 폴더 자동 감지)
     context_path = None
@@ -119,9 +187,8 @@ def main():
 
     print("✅ [LINT PASS] 모든 기계적 검증 통과 완료!")
 
-    # 평가 JSON이 없는 경우: 평가 에이전트용 패킷 자동 생성
+    # 평가 JSON이 없는 경우: 평가 에이전트용 패킷 자동 생성 (Session Isolation: 유니크 격리 폴더)
     if not (args.hr_eval and args.tech_eval):
-        packets_dir = Path(args.out_packets_dir).resolve()
         packets_dir.mkdir(parents=True, exist_ok=True)
 
         draft_content = draft_path.read_text(encoding="utf-8")
@@ -138,10 +205,29 @@ def main():
         hr_rubric = (REFS_DIR / "rubric_hr.json").read_text(encoding="utf-8")
         tech_rubric = (REFS_DIR / "rubric_tech.json").read_text(encoding="utf-8")
 
+        # 0. Session Run Token 생성 (격리 메타데이터)
+        token_path = packets_dir / "session_token.json"
+        draft_hash = compute_file_hash(draft_path)
+        spec_hash = compute_file_hash(spec_path)
+        token_data = {
+            "run_id": run_id,
+            "created_at": datetime.now().isoformat(),
+            "timestamp": time.time(),
+            "draft_hash": draft_hash,
+            "spec_hash": spec_hash,
+            "draft_file": str(draft_path),
+            "spec_file": str(spec_path),
+            "context_file": str(context_path) if context_path else None
+        }
+        token_path.write_text(json.dumps(token_data, ensure_ascii=False, indent=2), encoding="utf-8")
+
         # 1. HR Packet
         hr_packet_path = packets_dir / "hr_prompt_packet.txt"
         hr_prompt = f"""당신은 인사담당자(HR Talent Acquisition Lead)로서 완전히 독립된 블라인드 평가를 수행합니다.
 작성 대화 맥락, 이전 피드백, AI 메모리는 일체 배제하고 오직 주어진 텍스트와 지침만으로 평가하십시오.
+
+[세션 격리 토큰 (Session Run ID)]: {run_id}
+[초안 본문 해시 (Draft Hash Lock)]: {draft_hash}
 
 [평가 대상 공고 및 문항 스펙]
 {json.dumps(merged_spec, ensure_ascii=False, indent=2)}
@@ -177,6 +263,9 @@ def main():
         tech_packet_path = packets_dir / "tech_prompt_packet.txt"
         tech_prompt = f"""당신은 지원 부서의 현업 테크 리드(Principal Engineer)이자 엄격한 시니어 레드팀(Red Teamer)으로서 완전히 독립된 기술 블라인드 채점을 수행합니다.
 작성 대화 맥락, 온정주의, 칭찬은 일체 배제하고, 오직 엔지니어링 진실성, 'So What?' 3단계 결함 추궁, 그리고 Typed Locked Rubric 관점에서 냉정하게 평가하십시오.
+
+[세션 격리 토큰 (Session Run ID)]: {run_id}
+[초안 본문 해시 (Draft Hash Lock)]: {draft_hash}
 
 [현업 테크 리드 레드팀 평가 원칙]
 1. 칭찬 및 무비판적 만점 부여 절대 금지. 실전 시스템 관점에서 '왜 이 구현이 불합격인가'를 3단계 'So What?'으로 날카롭게 추궁할 것.
@@ -228,16 +317,24 @@ def main():
         tech_packet_path.write_text(tech_prompt, encoding="utf-8")
 
         print("\n" + "=" * 60)
-        print("📋 [Step 5] 2인 독립 평가 패킷 생성 완료")
+        print(f"📋 [Step 5] 2인 독립 평가 패킷 생성 완료 (Session Run ID: {run_id})")
         print("=" * 60)
+        print(f"👉 격리 세션 디렉토리: {packets_dir.parent}")
         print(f"👉 HR 평가 프롬프트 패킷: {hr_packet_path}")
         print(f"👉 Tech 평가 프롬프트 패킷: {tech_packet_path}")
+        print(f"👉 세션 토큰 메타데이터: {token_path}")
         print("\n[다음 안내]: 서브에이전트 또는 평가 모델에 위 두 패킷을 각각 입력하여 hr_eval.json과 tech_eval.json을 획득하십시오.")
-        print("그 후 아래 명령어로 최종 채점 리포트를 실행하십시오:")
+        print("그 후 아래 명령어로 최종 채점 리포트를 실행하십시오 (Draft Content Hash Lock 검증):")
         print(f"python3 {__file__} {args.draft} {args.spec} --hr-eval <hr_eval.json> --tech-eval <tech_eval.json> [--out <report.md>]")
         return
 
-    # 두 평가 JSON이 모두 제공된 경우: grade.py 즉시 실행
+    # 두 평가 JSON이 모두 제공된 경우: Draft Content Hash Lock 및 grade.py 즉시 실행
+    hr_eval_path = Path(args.hr_eval).resolve()
+    tech_eval_path = Path(args.tech_eval).resolve()
+
+    # Draft Content Hash Lock 검증 (초안 내용 변경 시 과거 평가 재사용 차단)
+    verify_evaluation_integrity(hr_eval_path, tech_eval_path, draft_path, allow_mismatch=args.allow_stale)
+
     print("\n" + "=" * 60)
     print("📊 [Step 5] grade.py 결정론적 기계 채점 및 감사 시작")
     print("=" * 60)
@@ -245,7 +342,7 @@ def main():
     grade_script = SCRIPTS_DIR / "grade.py"
     grade_cmd = [
         sys.executable, str(grade_script),
-        str(draft_path), str(args.hr_eval), str(args.tech_eval),
+        str(draft_path), str(hr_eval_path), str(tech_eval_path),
         "--hr-weight", str(args.hr_weight),
         "--tech-weight", str(args.tech_weight),
         "--spec", str(spec_path)

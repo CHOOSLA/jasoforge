@@ -141,6 +141,10 @@ REQUIRED_INVARIANTS = [
     ("담당업무 우선순위 계약", "key_responsibilities"),
     ("1순위 핵심 업무 직격 시 5점 만점", "최우선 담당업무"),
     ("3순위 이하 부수 업무 치중 시 Max 3점 캡핑", "3순위 이하"),
+
+    # 18. Session Isolation & Draft Content Hash Lock (v3.8.0)
+    ("세션 격리 유니크 런 디렉토리 계약", "Session_Isolation_And_Unique_Run_Dir_Contract"),
+    ("초안 본문 해시락 계약", "Draft_Content_Hash_Lock_Contract"),
 ]
 
 def verify_file(skill_path: Path) -> bool:
