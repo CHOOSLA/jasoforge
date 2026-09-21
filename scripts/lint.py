@@ -197,6 +197,12 @@ def check(qid, body, spec, banned, proper_nouns, blind_level="NONE"):
         if m:
             out['issues'].append(f"WARN 상투적 클리셰 감지: '{m.group(0)}' — 추상적 표현 대신 구체적 행동/결과 서술 권장")
 
+    # 2-1. AI 번역투 '~이 아니라 ~' 과다 대조 구문 검사 (문항당 2회 이상 시 경고)
+    contrast_pattern = r"([가-힣]+(?:이|가)\s*아니라|[가-힣]+(?:은|는)\s*아니었지만|[가-힣]+(?:이|가)\s*아닌)"
+    contrast_matches = re.findall(contrast_pattern, body)
+    if len(contrast_matches) >= 2:
+        out['issues'].append(f"WARN AI 번역투 대조 구문 과다({len(contrast_matches)}회): {contrast_matches[:3]} — 인위적 대조 대신 긍정형 직설 문장 권장")
+
     # 3. 단순 키워드 나열 억제 (Keyword Stuffing Detection)
     keyword_stuffing_pattern = r"([가-힣A-Za-z0-9_#+]+,\s*){3,}[가-힣A-Za-z0-9_#+]+"
     km = re.search(keyword_stuffing_pattern, body)
@@ -232,6 +238,21 @@ def check(qid, body, spec, banned, proper_nouns, blind_level="NONE"):
             out['issues'].append(f'WARN 최장 문장 {max(L)}자 — 끊는 편이 낫다')
         if len(set(l // 20 for l in L)) <= 1 and len(L) > 3:
             out['issues'].append('WARN 문장 길이가 균일 — 리듬 없음')
+
+        # 5. 종결어미 다양성 분포 검사 (동일 종결어미 60% 이상 독점 시 경고)
+        endings = []
+        for s in ss:
+            s_clean = s.strip()
+            em = re.search(r'([가-힣]{2,4}[.!?]?)$', s_clean)
+            if em:
+                endings.append(em.group(1).rstrip('.!?'))
+        if len(endings) >= 4:
+            from collections import Counter
+            counts = Counter(endings)
+            top_ending, top_count = counts.most_common(1)[0]
+            ratio = top_count / len(endings)
+            if ratio >= 0.60:
+                out['issues'].append(f"WARN 종결어미 획일화: '{top_ending}' 종결 {top_count}/{len(endings)}개({ratio:.0%}) — 리듬감 개선을 위해 어미 변주 권장")
 
     # N-gram 기반 상투적/중복 구문 탐지 (4-gram 2회 이상 또는 3-gram 3회 이상, 불용어 제외)
     rep_ngrams = check_repeated_ngrams(body, n=4, min_count=2)
@@ -297,6 +318,19 @@ if __name__ == '__main__':
                 fails += i.startswith('FAIL')
         else:
             print('  지적 없음')
+
+    # 지원서 전역 마무리 종결어 반복 검사 (예: 전 문항 '기여하겠습니다' 반복 획일화 탐지)
+    if len(draft) >= 3:
+        closings = []
+        for qid, body in draft.items():
+            ss = sentences(body)
+            if ss:
+                last_s = ss[-1].strip()
+                m = re.search(r'([가-힣]+(?:기여하겠습니다|이바지하겠습니다|노력하겠습니다|보탬이\s*되겠습니다))', last_s)
+                if m:
+                    closings.append((qid, m.group(0)))
+        if len(closings) >= len(draft):
+            print(f"\n⚠️ WARN [Closing Monotony]: 전체 {len(draft)}개 문항의 마무리가 모두 상투적 기여/노력 다짐({[c[1] for c in closings]})으로 획일화되었습니다. 문항별 구체적 완성/방어 목표로 변주를 권장합니다.")
 
     if total_typo_count >= 3:
         print(f"\n🚨 CRITICAL FAIL [Knockout Red Flag]: 지원서 전체에서 치명적 오탈자가 {total_typo_count}건 누적되었습니다. (3건 이상 방치 시 Step 5 사법 심판에서 자동 탈락/Hard Clamp 대상이 되므로 전수 교정 필수)")
