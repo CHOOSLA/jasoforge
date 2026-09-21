@@ -209,6 +209,11 @@ def check(qid, body, spec, banned, proper_nouns, blind_level="NONE"):
     if km:
         out['issues'].append(f"WARN 단순 키워드 나열 감지: '{km.group(0)}' — 쉼표 나열 대신 유기적 인과관계 서술 권장")
 
+    # 3-1. 중간점(·) 특수문자 및 나열식 서술 탐지 (Middle Dot Zero-Tolerance Rule)
+    middle_dots = re.findall(r"[·ㆍ•∙‧·]", body)
+    if middle_dots:
+        out['issues'].append(f"WARN 중간점({middle_dots[0]}) {len(middle_dots)}건 검출 — 키워드 나열 대신 유기적 문장 서술(단소수 원칙) 권장 및 ATS 웹폼 호환성 확보")
+
     # 4. 치명적 오탈자 및 맞춤법 결함 검출 (Typo & Integrity Gate)
     COMMON_TYPO_PATTERNS = [
         (r'\b곳\b(?=\s*(?:고객|서버|데이터|자산))', '곳 ➔ 곧(부사) 오기'),
