@@ -2,7 +2,7 @@
 """자소서 2인 독립 검증 기계 집계기 (grade.py v3.4).
 최신 2026년 LLM-as-a-Judge 연구(RULERS arXiv:2601.08654)를 준수합니다:
 1. Token-level Jaccard Overlap Ratio (≥0.75) 기반 인용구 무결성 감사 (Fuzzy Grounding).
-2. Typed Locked Rubric Gating: 서사 유형(Type_A, Type_B, Type_C) 필수 증거 및 배제 조건(Negative Boundary) 위반 시 기계적 3점 캡핑(Clamping).
+2. 서사 유형이나 특정 완수 방식의 부재로 점수를 제한하지 않으며 본문 주장과 근거를 평가합니다.
 3. HR(40%)과 Tech Lead(60%)의 결정론적 가중 평균 계산 및 면접 방어 리포트 생성.
 """
 
@@ -65,113 +65,13 @@ def verify_quotes(quotes, full_text):
         results.append({"quote": q, "valid": is_valid})
     return results
 
-TYPE_ALIASES = {
-    "Type_A": "Type_A",
-    "Type_B": "Type_B",
-    "Type_C": "Type_C",
-    "Type_D": "Type_D",
-    "Type_E": "Type_E",
-    "Complexity_And_Resource_Optimization": "Type_D",
-    "Infrastructure_And_Data_Pipeline": "Type_E",
-    "Decision_Making_And_Tradeoffs": "Type_A",
-    "Deep_Debugging_And_Underlying_Root_Cause": "Type_B",
-    "Full_Stack_System_Perspective": "Type_C"
-}
-
-TYPE_D_PATTERN = re.compile(r'(O\([^)]+\)|\d+(?:\.\d+)?\s*(?:ms|s|초|%|MB|GB|배|fps|qps))', re.IGNORECASE)
-TYPE_D_SEMANTIC_PATTERN = re.compile(r'(쿼리|조회|N\+1|인덱스|캐시|캐싱|배치|batch|지연|병목|감축|절감|단축|경량화|자료구조|메모리|누수|프로파일링|실행\s*시간|반복문|알고리즘)', re.IGNORECASE)
-
-TYPE_E_PATTERN = re.compile(r'(\d+(?:\.\d+)?\s*(?:qps|tps|ms|초|건/초|mbps|gbps|req/s)|TPS|QPS|SLA|파이프라인)', re.IGNORECASE)
-TYPE_E_SEMANTIC_PATTERN = re.compile(r'(비동기|메시지\s*큐|Kafka|RabbitMQ|스트림|파이프라인|백프레셔|스케일|커넥션\s*풀|처리량|이벤트|분산|배치\s*작업|I/O|버퍼|워커)', re.IGNORECASE)
-
-# 상용 프로덕션 + 독립 피어 검증 + 신입 엔지니어링 5대 완수 앵커 통합 패턴
-AXIS_C_RIGOR_PATTERN = re.compile(
-    r'(운영|장애|트래픽|SLA|유료|마감|배포|프로덕션|상용|고객사|서비스|'
-    r'PR|머지|merge|등재|논문|학회|SOTA|벤치마크|스타\s*\d+|오픈소스|업스트림|'
-    r'피드백|프리티어|OOM|스왑|swap|k6|JMeter|Locust|부하|병목|커넥션\s*풀|'
-    r'린터|linter|Husky|CI|GitHub Actions|멱등성|트랜잭션|정합성|불변식|핫픽스|Sentry|프로파일링)',
-    re.IGNORECASE
-)
-
 def audit_type_rubric_gating(tech_q, full_draft_text, question_nature=None):
-    """
-    5대 직교 서사 유형(Type A, B, C, D, E) 선행 선언 및 의미론적 맥락 구제(Semantic Fallback) 엔진
-    """
-    type_decl = tech_q.get("type_declaration", {})
-    raw_type = type_decl.get("selected_type", "")
-    sel_type = TYPE_ALIASES.get(raw_type, raw_type)
-    score_b = tech_q.get("scores", {}).get("B", 0)
-
-    # 0. 가치관/진로 선택 문항의 판단 근거(Decision Rationale) 검증
-    is_culture_fit = question_nature in ['CULTURE_FIT', 'MOTIVATION', 'VALUES', 'VALUE', 'PERSONALITY', 'VISION', 'COLLABORATION'] or type_decl.get("exempt_tradeoff")
-    if is_culture_fit:
-        return "ℹ️ **[판단 근거]** 가치관/진로 선택 및 태도 형성의 의사결정 인과관계와 진정성을 검증합니다."
-
-    # 1. 유형 선언 누락 검사 (기존 데이터 호환: 선언 없으면 경고만)
-    if not sel_type or sel_type not in ["Type_A", "Type_B", "Type_C", "Type_D", "Type_E"]:
-        return "Type 미선언 (기존 데이터 호환)"
-
-    # 2. 필수 증거 인용구 실존 검사
-    must_evidence = type_decl.get("must_have_evidence_found", "")
-    if score_b >= 4 and (not must_evidence or not verify_quote_fuzzy(must_evidence, full_draft_text)):
-        tech_q["scores"]["B"] = 3
-        return f"⚠️ **CLAMPED**: {sel_type} 필수 관찰 증거 미확인으로 B축 점수가 3점으로 기계 강제 하향되었습니다."
-
-    # 3. Type_D(알고리즘 및 복잡도 최적화) 3단계 의미론적 맥락 구제
-    if sel_type == "Type_D" and score_b >= 4:
-        combined_text = (must_evidence or "") + " " + full_draft_text
-        if not TYPE_D_PATTERN.search(combined_text):
-            # Tier 2: 의미론적 맥락 패턴 매칭 검사
-            semantic_hits = TYPE_D_SEMANTIC_PATTERN.findall(combined_text)
-            if len(set(semantic_hits)) >= 2:
-                # 공학적 개선 인과관계가 확실하면 PASS
-                pass
-            else:
-                # Tier 3: 정량 수치 및 핵심 용어 미달 시 4점 Soft Clamp
-                tech_q["scores"]["B"] = 4
-                return f"ℹ️ **SOFT CLAMPED**: {sel_type} 정량 수치 토큰 부재로 B축 점수가 4점(소프트 캡)으로 보정되었습니다."
-
-    # 4. Type_E(데이터 및 인프라 파이프라인) 3단계 의미론적 맥락 구제
-    if sel_type == "Type_E" and score_b >= 4:
-        combined_text = (must_evidence or "") + " " + full_draft_text
-        if not TYPE_E_PATTERN.search(combined_text):
-            # Tier 2: 의미론적 맥락 패턴 매칭 검사
-            semantic_hits = TYPE_E_SEMANTIC_PATTERN.findall(combined_text)
-            if len(set(semantic_hits)) >= 2:
-                # 파이프라인 병목 해소 인과관계 확인 시 PASS
-                pass
-            else:
-                tech_q["scores"]["B"] = 4
-                return f"ℹ️ **SOFT CLAMPED**: {sel_type} 정량 스루풋 토큰 부재로 B축 점수가 4점(소프트 캡)으로 보정되었습니다."
-
-    # 5. 배제 조건(Negative Boundary) 위반 플래그 시 하드 캡
-    if type_decl.get("negative_boundary_violated") and score_b > 3:
-        tech_q["scores"]["B"] = 3
-        return f"⚠️ **CLAMPED**: {sel_type} 전용 배제 기준(Negative Boundary) 위반으로 B축 점수가 3점으로 기계 강제 하향되었습니다."
-
-    return f"✅ **PASSED**: {sel_type} 잠금 루브릭(Locked Rubric) 기계 감사 통과"
+    """기존 호출 계약 유지. 폐기한 유형 메타데이터는 점수에 반영하지 않는다."""
+    return "ℹ️ 서사 유형은 점수 조건이 아닙니다. 판단 근거는 문항과 본문 주장에 따라 평가합니다."
 
 def audit_axis_c_gating(tech_q, full_draft_text):
-    """
-    축 C (완수 과정 & 리스크 책임) 5점 만점 부여 시,
-    상용 프로덕션 실전성, 공인 피어 검증, 또는 신입 엔지니어링 5대 완수 앵커 실존 여부 기계적 감사.
-    단순 로컬 샌드박스 안주/튜토리얼 복붙일 경우 C축을 Max 3점으로 기계 캡핑.
-    """
-    score_c = tech_q.get("scores", {}).get("C", 0)
-    if score_c < 5:
-        return None
-
-    quotes = tech_q.get("quotes", [])
-    combined = " ".join(quotes)
-
-    has_evidence_in_quote = bool(AXIS_C_RIGOR_PATTERN.search(combined))
-    has_evidence_in_draft = bool(AXIS_C_RIGOR_PATTERN.search(full_draft_text))
-
-    if not has_evidence_in_quote and not has_evidence_in_draft:
-        tech_q["scores"]["C"] = 3
-        return "⚠️ **CLAMPED**: 축 C 5점 부여 요건인 프로덕션 실전성/신입 5대 완수 앵커(배포, OOM극복, 부하테스트, 린터, 멱등성) 증거 부재로 C축 점수가 3점으로 기계 강제 하향되었습니다."
-
-    return "✅ **PASSED**: 축 C 상용 프로덕션/신입 완수 책임/공인 피어 검증 감사 통과"
+    """완수는 실제 수행과 결과로 평가하며 특정 키워드의 부재로 제한하지 않는다."""
+    return None
 
 # ==============================================================================
 # 🎯 채용 아키타입(Recruitment Archetype) & 도메인/지면 정합도 게이팅
@@ -403,7 +303,7 @@ KNOCKOUT_FLAG_PATTERNS = {
 
 def audit_knockout_gatekeeper(tech_data, hr_data, full_draft_text, knockout_eval_path=None):
     """
-    3대 치명적 레드 플래그(자아과잉, 오탈자/모순, 조각모음)를 사법 감사하여,
+    자아과잉 및 오탈자/모순을 감사하며 폐기한 서사 형식 결격은 적용하지 않는다.
     1건이라도 SUSTAINED(유효 채택) 시 선형 가중합을 무효화하고 총점을 Max 75점으로 강제 캡핑(Hard Clamp).
     """
     sustained_flags = []
@@ -415,6 +315,13 @@ def audit_knockout_gatekeeper(tech_data, hr_data, full_draft_text, knockout_eval
             ke_data = json.loads(Path(knockout_eval_path).read_text(encoding='utf-8'))
             r_flags = ke_data.get("knockout_flags", {})
             for flag_key, flag_info in r_flags.items():
+                if flag_key == "FLAG_LAUNDRY_LIST":
+                    dismissed_flags.append({
+                        "key": flag_key,
+                        "name": flag_info.get("name", flag_key),
+                        "reason": "서사 유형·프로젝트 수에 따른 결격 규칙은 폐기되었습니다."
+                    })
+                    continue
                 status = flag_info.get("verdict", "").upper()
                 if "SUSTAINED" in status or flag_info.get("sustained") is True:
                     sustained_flags.append({
@@ -478,24 +385,13 @@ def audit_knockout_gatekeeper(tech_data, hr_data, full_draft_text, knockout_eval
             "reason": "오탈자 3건 미만 및 서사 일관성 유지 확인"
         })
 
-    # --- Flag 3: 무관한 프로젝트 조각모음 나열 (Type_C 독소) ---
-    has_laundry_critique = any(kw in all_tech_critiques for kw in KNOCKOUT_FLAG_PATTERNS["FLAG_LAUNDRY_LIST"]["keywords"])
-    min_b_score = min([q.get("scores", {}).get("B", 5) for q in tech_data.get("questions", {}).values()] or [5])
-    # 본문 내 다중 프로젝트(MFC, MobileNet, SSL Pinning, 캠핑카, 분산) 동시 출현 검사
-    multi_project_hits = [p for p in ['MFC', 'MobileNet', 'SSL Pinning', '캠핑카', '분산 클러스터'] if p in full_draft_text]
-    if (has_laundry_critique and min_b_score <= 2) or len(multi_project_hits) >= 4:
-        evidence = f"단일 문항 내 {len(multi_project_hits)}개 무관 프로젝트 조각모음 적발 (Type_C 독소 저촉)" if len(multi_project_hits) >= 2 else "심층 아키텍처 결여 및 백화점식 조각모음 나열 적발"
-        sustained_flags.append({
-            "key": "FLAG_LAUNDRY_LIST",
-            "name": KNOCKOUT_FLAG_PATTERNS["FLAG_LAUNDRY_LIST"]["name"],
-            "evidence": evidence
-        })
-    else:
-        dismissed_flags.append({
-            "key": "FLAG_LAUNDRY_LIST",
-            "name": KNOCKOUT_FLAG_PATTERNS["FLAG_LAUNDRY_LIST"]["name"],
-            "reason": "단일 프로젝트 아키텍처 집중 및 심층 디버깅 인과관계 확인"
-        })
+    # 여러 경험·기술의 등장 자체로 조각모음이나 단일 서사 위반을 단정하지 않는다.
+    # 문항과 무관한 나열이라는 지적은 본문의 실제 근거에 따라 일반 축에서 평가한다.
+    dismissed_flags.append({
+        "key": "FLAG_LAUNDRY_LIST",
+        "name": KNOCKOUT_FLAG_PATTERNS["FLAG_LAUNDRY_LIST"]["name"],
+        "reason": "프로젝트·기술의 수나 서사 유형만으로 결격 판정을 하지 않습니다."
+    })
 
     return sustained_flags, dismissed_flags
 
@@ -564,7 +460,7 @@ def main():
     report = []
     report.append("# 📊 자소서 2인 독립 검증 결과 종합 리포트 (jaso-pipeline v3.7)")
     report.append(f"- **가중치 반영 비율**: HR 인사담당자 {w_hr*100:.0f}% : 현업 테크 리드 {w_tech*100:.0f}% (A~J 10개 축 직교 평가 및 도메인 과업 정합도)")
-    report.append("- **평가 원칙**: 산술 연산 배제, Typed Locked Rubric 적용, 환각 인용 점수 롤백(Rollback), Word Bi-gram 인용구 감사\n")
+    report.append("- **평가 원칙**: 문항과 본문 근거 평가, 환각 인용 점수 롤백(Rollback), Word Bi-gram 인용구 감사\n")
 
     q_ids = sorted(list(set(list(draft.keys()) + list(hr_data.get("questions", {}).keys()))))
     
@@ -612,16 +508,16 @@ def main():
                     tech_axes[axis] = 5
                     rollback_logs.append(f"- 🔄 **[점수 롤백]** 문항 {qid} 현업 테크 리드: 가짜 인용구 감지로 인해 {axis}축 감점 무효화 ({score}점 ➔ 5.0점 복원)")
 
-        # 3. Typed Locked Rubric & 기계 감사 집행 (B, C, D, G축 최종 하드 클램핑)
+        # 3. 인용 검증 후 문항별 계약 감사
         q_draft_text = draft.get(qid, "")
 
-        # B축 서사 유형 Locked Rubric 감사
+        # B축 기존 호출 호환 (유형별 상한 폐기)
         audit_log = audit_type_rubric_gating(tech_q, full_draft_text, question_nature=q_nature)
         if "B" in tech_q.get("scores", {}):
             tech_axes["B"] = tech_q["scores"]["B"]
         type_audit_logs.append(f"- [문항 {qid} B축] {audit_log}")
 
-        # C축 상용 프로덕션 및 완수 앵커 감사
+        # C축 기존 호출 호환 (키워드별 상한 폐기)
         c_audit_log = audit_axis_c_gating(tech_q, full_draft_text)
         if "C" in tech_q.get("scores", {}):
             tech_axes["C"] = tech_q["scores"]["C"]
@@ -719,8 +615,8 @@ def main():
             report.append(f"- ℹ️ **[{df['name']}]**: {df['reason']}")
         report.append("")
 
-    # 3. Typed Locked Rubric Gating 기계 감사 로그
-    report.append("## 3. Typed Locked Rubric 기계 감사 로그 (Anti-Sycophancy)\n")
+    # 3. 문항별 근거와 규격 감사 로그
+    report.append("## 3. 문항별 근거와 규격 감사 로그\n")
     for log in type_audit_logs:
         report.append(log)
     report.append("")

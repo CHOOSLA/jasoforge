@@ -140,21 +140,8 @@ def check(qid, body, spec, banned, proper_nouns, blind_level="NONE"):
         else:
             out['info'].setdefault('항목충족', []).append(f'{item} ← {hits}')
 
-    # 버린 대안(트레이드오프) 키워드 출현 게이트 (비기술 문항 면제)
-    q_nature = spec.get('question_nature', '')
-    is_exempt_tradeoff = spec.get('exempt_tradeoff') or q_nature in [
-        'MOTIVATION', 'VALUES', 'VISION', 'COLLABORATION',
-        'MOTIVATION_ASPIRATION', 'CULTURE_COLLAB_SOFT'
-    ]
-    discarded_kws = spec.get('discarded_alternative_keywords', [])
-    if is_exempt_tradeoff:
-        out['info']['버린대안식별'] = "비기술/지원동기 문항으로 버린 대안(Why Not) 검사 면제 (EXEMPT)"
-    elif discarded_kws:
-        d_hits = [dk for dk in discarded_kws if dk in body]
-        if not d_hits:
-            out['issues'].append(f'WARN 버린 대안(Why Not) 키워드 미발견: {discarded_kws} — B축 감점 방지를 위해 본문 명시 필수')
-        else:
-            out['info']['버린대안식별'] = f"확인됨: {d_hits}"
+    # 대안 비교가 실제 문항 요구라면 required_items에서 함께 확인한다.
+    # 과거 discarded_alternative_keywords는 자동 문체·서사 조건으로 사용하지 않는다.
 
     # 블라인드 레벨 분기 적용
     effective_banned = list(banned)
@@ -197,22 +184,11 @@ def check(qid, body, spec, banned, proper_nouns, blind_level="NONE"):
         if m:
             out['issues'].append(f"WARN 상투적 클리셰 감지: '{m.group(0)}' — 추상적 표현 대신 구체적 행동/결과 서술 권장")
 
-    # 2-1. AI 번역투 '~이 아니라 ~' 과다 대조 구문 검사 (문항당 2회 이상 시 경고)
-    contrast_pattern = r"([가-힣]+(?:이|가)\s*아니라|[가-힣]+(?:은|는)\s*아니었지만|[가-힣]+(?:이|가)\s*아닌)"
-    contrast_matches = re.findall(contrast_pattern, body)
-    if len(contrast_matches) >= 2:
-        out['issues'].append(f"WARN AI 번역투 대조 구문 과다({len(contrast_matches)}회): {contrast_matches[:3]} — 인위적 대조 대신 긍정형 직설 문장 권장")
-
     # 3. 단순 키워드 나열 억제 (Keyword Stuffing Detection)
     keyword_stuffing_pattern = r"([가-힣A-Za-z0-9_#+]+,\s*){3,}[가-힣A-Za-z0-9_#+]+"
     km = re.search(keyword_stuffing_pattern, body)
     if km:
         out['issues'].append(f"WARN 단순 키워드 나열 감지: '{km.group(0)}' — 쉼표 나열 대신 유기적 인과관계 서술 권장")
-
-    # 3-1. 중간점(·) 특수문자 및 나열식 서술 탐지 (Middle Dot Zero-Tolerance Rule)
-    middle_dots = re.findall(r"[·ㆍ•∙‧·]", body)
-    if middle_dots:
-        out['issues'].append(f"WARN 중간점({middle_dots[0]}) {len(middle_dots)}건 검출 — 키워드 나열 대신 유기적 문장 서술(단소수 원칙) 권장 및 ATS 웹폼 호환성 확보")
 
     # 4. 치명적 오탈자 및 맞춤법 결함 검출 (Typo & Integrity Gate)
     COMMON_TYPO_PATTERNS = [
@@ -239,26 +215,6 @@ def check(qid, body, spec, banned, proper_nouns, blind_level="NONE"):
     if ss:
         L = [len(s) for s in ss]
         out['info']['문장'] = f'{len(ss)}개, 평균 {sum(L)//len(L)}자, 최장 {max(L)}, 최단 {min(L)}'
-        if max(L) > 120:
-            out['issues'].append(f'WARN 최장 문장 {max(L)}자 — 끊는 편이 낫다')
-        if len(set(l // 20 for l in L)) <= 1 and len(L) > 3:
-            out['issues'].append('WARN 문장 길이가 균일 — 리듬 없음')
-
-        # 5. 종결어미 다양성 분포 검사 (동일 종결어미 60% 이상 독점 시 경고)
-        endings = []
-        for s in ss:
-            s_clean = s.strip()
-            em = re.search(r'([가-힣]{2,4}[.!?]?)$', s_clean)
-            if em:
-                endings.append(em.group(1).rstrip('.!?'))
-        if len(endings) >= 4:
-            from collections import Counter
-            counts = Counter(endings)
-            top_ending, top_count = counts.most_common(1)[0]
-            ratio = top_count / len(endings)
-            if ratio >= 0.60:
-                out['issues'].append(f"WARN 종결어미 획일화: '{top_ending}' 종결 {top_count}/{len(endings)}개({ratio:.0%}) — 리듬감 개선을 위해 어미 변주 권장")
-
     # N-gram 기반 상투적/중복 구문 탐지 (4-gram 2회 이상 또는 3-gram 3회 이상, 불용어 제외)
     rep_ngrams = check_repeated_ngrams(body, n=4, min_count=2)
     if not rep_ngrams:
@@ -268,15 +224,12 @@ def check(qid, body, spec, banned, proper_nouns, blind_level="NONE"):
         if len(rep_ngrams) >= 3:
             out['issues'].append(f'WARN 동일 N-gram 어구 {len(rep_ngrams)}건 반복 — 문장 단조로움 점검 권장')
 
-    # 첫 본문 단락 비중 (소제목 제외 후 실제 상황 설명 측정, 500자 이하 면제)
+    # 첫 단락 길이는 상황 설명의 의미나 필요한 비중을 판정하지 않는다.
     n_all = len(body)
-    if n_all > 500 and real_paras:
-        r = len(real_paras[0]) / n_all if n_all > 0 else 0
-        out['info']['첫본문단락비중'] = f'{r:.0%} ({len(real_paras[0])}/{n_all}자)'
-        threshold = 0.45 if q_nature in ['MOTIVATION', 'VALUES', 'VISION', 'COLLABORATION', 'MOTIVATION_ASPIRATION', 'CULTURE_COLLAB_SOFT'] else 0.35
-        if r > threshold:
-            out['issues'].append(f'WARN 첫 본문 단락이 {r:.0%} — 상황 설명 {int(threshold*100)}% 초과 가능 (배경 압축 권장)')
-            
+    if real_paras and n_all:
+        r = len(real_paras[0]) / n_all
+        out['info']['첫본문단락비중'] = f'{r:.0%} ({len(real_paras[0])}/{n_all}자, 참고 정보)'
+
     return out
 
 if __name__ == '__main__':
@@ -335,7 +288,7 @@ if __name__ == '__main__':
                 if m:
                     closings.append((qid, m.group(0)))
         if len(closings) >= len(draft):
-            print(f"\n⚠️ WARN [Closing Monotony]: 전체 {len(draft)}개 문항의 마무리가 모두 상투적 기여/노력 다짐({[c[1] for c in closings]})으로 획일화되었습니다. 문항별 구체적 완성/방어 목표로 변주를 권장합니다.")
+            print(f"\nℹ️ INFO [Closing Repetition]: 전체 {len(draft)}개 문항의 마무리가 모두 상투적 기여/노력 다짐({[c[1] for c in closings]})으로 반복됩니다. 문항에 필요한 결말인지 읽고 확인하십시오.")
 
     if total_typo_count >= 3:
         print(f"\n🚨 CRITICAL FAIL [Knockout Red Flag]: 지원서 전체에서 치명적 오탈자가 {total_typo_count}건 누적되었습니다. (3건 이상 방치 시 Step 5 사법 심판에서 자동 탈락/Hard Clamp 대상이 되므로 전수 교정 필수)")
