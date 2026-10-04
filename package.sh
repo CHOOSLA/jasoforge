@@ -6,7 +6,7 @@
 
 set -euo pipefail
 
-VERSION="5.0.0"
+VERSION="5.1.0"
 DIST_DIR="dist"
 PACKAGE_NAME="jasoforge-v${VERSION}"
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

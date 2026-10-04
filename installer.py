@@ -21,7 +21,7 @@ import time
 import subprocess
 from pathlib import Path
 
-VERSION = "5.0.0"
+VERSION = "5.1.0"
 SKILL_NAME = "jaso-pipeline"
 
 # ANSI Terminal Colors
@@ -67,6 +67,7 @@ def verify_source(source_dir: Path) -> bool:
         source_dir / "references" / "migration.md",
         source_dir / "references" / "rubric_hr.json",
         source_dir / "references" / "question-flows.md",
+        source_dir / "references" / "experience-intake.md",
         source_dir / "references" / "rubric_tech.json",
     ]
     for rf in required_files:
