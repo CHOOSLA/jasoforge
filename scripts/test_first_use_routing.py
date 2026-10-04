@@ -67,6 +67,22 @@ class FirstUseRoutingTests(unittest.TestCase):
         result = SmartIngestionRouter.route_input('이 문장만 고쳐줘: 배포 파이프라인을 개선했습니다.', False)
         self.assertEqual(result['next_action'], 'CLASSIFY_REQUEST_AND_AVAILABLE_INPUTS')
 
+    def test_using_skill_to_review_job_does_not_request_skill_maintenance(self):
+        for request in (
+            'JasoForge로 이 공고의 자기소개서를 검토해줘. https://example.com/job',
+            '자소서 파이프라인으로 이 공고의 자기소개서 작성·검증해줘. https://example.com/job',
+            'jaso-pipeline 스킬을 사용해서 이 공고 자소서 검토해줘. https://example.com/job',
+            '이 스킬로 공고를 검토해줘. https://example.com/job',
+        ):
+            with self.subTest(request=request):
+                result = SmartIngestionRouter.route_input(request, False)
+                self.assertEqual(result['next_action'], 'READ_URL_AND_CLASSIFY')
+
+    def test_named_skill_itself_still_routes_to_maintenance(self):
+        for request in ('JasoForge 스킬 자체를 검토해줘.', 'jaso-pipeline를 수정해줘.', '이 스킬의 입력 흐름을 고쳐줘.'):
+            result = SmartIngestionRouter.route_input(request, False)
+            self.assertEqual(result['next_action'], 'REVIEW_SKILL_WITHOUT_RUNNING_APPLICATION_PIPELINE')
+
 
 if __name__ == '__main__':
     unittest.main()

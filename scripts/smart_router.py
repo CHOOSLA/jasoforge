@@ -149,7 +149,14 @@ class SmartIngestionRouter:
         }
 
         # 스킬 유지보수 요청은 지원서 작성·채점·동기화 실행 요청이 아니다.
-        if re.search(r'(?:jaso[-_]pipeline|jasoforge|자소서\s*파이프라인|(?:이|해당)\s*스킬|^스킬).{0,80}(?:검증|수정|다듬|개선|검토|고쳐|점검)', text, re.I | re.S):
+        maintenance_target = re.search(
+            r'(?:jaso[-_]pipeline|jasoforge)(?=\s|[을를의]|$)|(?:이|해당)\s*스킬|^스킬', text, re.I)
+        target_suffix = text[maintenance_target.end():] if maintenance_target else ''
+        invoked_for_work = re.match(
+            r'\s*(?:스킬|파이프라인)?\s*(?:(?:로|으로)(?:\s|$)|(?:을|를)?\s*(?:사용|활용))',
+            target_suffix)
+        if maintenance_target and not invoked_for_work and re.search(
+                r'(?:검증|수정|다듬|개선|검토|고쳐|점검)', target_suffix[:80]):
             result["detected_case"] = "CASE_SKILL_MAINTENANCE"
             result["next_action"] = "REVIEW_SKILL_WITHOUT_RUNNING_APPLICATION_PIPELINE"
             return result
