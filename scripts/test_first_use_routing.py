@@ -42,6 +42,31 @@ class FirstUseRoutingTests(unittest.TestCase):
         result = SmartIngestionRouter.route_input('jaso-pipeline 스킬의 첫 사용자 경험 수집을 수정해줘.', False)
         self.assertEqual(result['next_action'], 'REVIEW_SKILL_WITHOUT_RUNNING_APPLICATION_PIPELINE')
 
+    def test_experience_team_is_not_a_target_employer(self):
+        for request in (
+            '지원 회사는 아직 없어. 학생회 홍보팀에서 축제 안내문을 만든 경험부터 정리해줘.',
+            '홍보팀에서 안내문을 만든 경험부터 정리해줘.',
+            '--offline 홍보팀에서 안내문을 만든 경험부터 정리해줘.',
+            '이 문장만 고쳐줘: 백엔드팀과 협업했습니다.',
+        ):
+            with self.subTest(request=request):
+                result = SmartIngestionRouter.route_input(request, False)
+                self.assertEqual(result['next_action'], 'CLASSIFY_REQUEST_AND_AVAILABLE_INPUTS')
+                self.assertIsNone(result['candidate_team'])
+                self.assertIsNone(result['search_query'])
+                self.assertFalse(result['needs_identity_resolution'])
+
+    def test_bare_team_call_still_resolves_target_with_offline_boundary(self):
+        for request in ('이즐IS팀', '이즐IS팀 자소서 봐줘', '--offline 이즐IS팀 봐줘'):
+            result = SmartIngestionRouter.route_input(request, False)
+            self.assertEqual(result['candidate_team'], '이즐IS팀')
+            expected = 'RESOLVE_IDENTITY_FROM_LOCAL_CONTEXT' if '--offline' in request else 'RESOLVE_ORGANIZATION_IDENTITY'
+            self.assertEqual(result['next_action'], expected)
+
+    def test_pipeline_experience_is_not_skill_maintenance(self):
+        result = SmartIngestionRouter.route_input('이 문장만 고쳐줘: 배포 파이프라인을 개선했습니다.', False)
+        self.assertEqual(result['next_action'], 'CLASSIFY_REQUEST_AND_AVAILABLE_INPUTS')
+
 
 if __name__ == '__main__':
     unittest.main()

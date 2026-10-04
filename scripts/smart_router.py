@@ -42,6 +42,12 @@ class SmartIngestionRouter:
         r'([가-힣A-Za-z0-9\-_]{2,20}(?:팀|파트|본부|실|센터|그룹))',
         re.IGNORECASE
     )
+    TEAM_CALL_PATTERN = re.compile(
+        TEAM_PATTERN.pattern
+        + r'(?:\s+(?:자소서|지원서|채용|공고))?'
+        + r'(?:\s+(?:봐줘|봐주세요|평가해줘|분석해줘|알려줘))?[.!?]?',
+        re.IGNORECASE
+    )
 
     # 2-2. 명시적 지원 대상 헤더 패턴 (초안 상단 메타데이터: "[지원부서: 이즐IS팀]", "지원팀: ...", "희망부서: ...")
     EXPLICIT_HEADER_TEAM_PATTERN = re.compile(
@@ -143,7 +149,7 @@ class SmartIngestionRouter:
         }
 
         # 스킬 유지보수 요청은 지원서 작성·채점·동기화 실행 요청이 아니다.
-        if re.search(r'(?:스킬|파이프라인|jaso[-_]pipeline).{0,80}(?:검증|수정|다듬|개선|검토|고쳐|점검)', text, re.I | re.S):
+        if re.search(r'(?:jaso[-_]pipeline|jasoforge|자소서\s*파이프라인|(?:이|해당)\s*스킬|^스킬).{0,80}(?:검증|수정|다듬|개선|검토|고쳐|점검)', text, re.I | re.S):
             result["detected_case"] = "CASE_SKILL_MAINTENANCE"
             result["next_action"] = "REVIEW_SKILL_WITHOUT_RUNNING_APPLICATION_PIPELINE"
             return result
@@ -238,7 +244,8 @@ class SmartIngestionRouter:
 
         # Case 4: 회사명이나 지시어 호출형 ("다우기술 자소서 봐줘", "키움증권 평가해줘")
         for comp in sorted(cls.KNOWN_COMPANIES, key=len, reverse=True):
-            if comp in text:
+            # '파이프라인' 안의 '라인'처럼 일반 단어의 일부를 회사명으로 잡지 않는다.
+            if re.search(r'(?<![가-힣A-Za-z0-9])' + re.escape(comp), text):
                 result["detected_case"] = "CASE_4_COMPANY_CALL"
                 result["company"] = comp
                 if mode != "NOTION_SYNC" or not has_notion_env:
@@ -248,9 +255,12 @@ class SmartIngestionRouter:
                 return result
 
         # Case 4-1: 모호한 팀명 단문 호출형 ("이즐IS팀 봐줘", "코어플랫폼팀 평가해줘", "이즐IS팀")
-        # (100자 이하의 짧은 사용자 프롬프트일 때만 팀명으로 바인딩하여 3단계 리졸버 가동)
+        # 팀명 중심의 단독 호출에만 적용한다. 경험·수정할 문장 속 팀은 지원 대상이 아니다.
         if len(text) <= 100:
-            team_match = cls.TEAM_PATTERN.search(text)
+            call_text = text
+            for flag in cls.LOCAL_FLAGS + cls.NOTION_FLAGS:
+                call_text = re.sub(r'(?<!\S)' + re.escape(flag) + r'(?!\S)', '', call_text)
+            team_match = cls.TEAM_CALL_PATTERN.fullmatch(call_text.strip())
             if team_match:
                 candidate_team = team_match.group(1)
                 result["detected_case"] = "CASE_TEAM_CALL_RESOLVER"
