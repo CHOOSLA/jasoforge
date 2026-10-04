@@ -266,9 +266,13 @@ class SmartIngestionRouter:
                 result["question_prompt"] = cls.format_confirmation_prompt(candidate_team=candidate_team)
                 return result
 
-        # 매칭되지 않는 짧은 일반 질문
+        # 자료가 없는 요청도 정상 진입이다. 작업 범위는 호스트가 대화에서 판단한다.
         result["detected_case"] = "CASE_FALLBACK_QUERY"
-        result["next_action"] = "PROMPT_USER_FOR_URL_OR_DRAFT"
-        result["needs_user_question"] = True
-        result["question_prompt"] = "채용 공고 링크(자소설닷컴/공식 ATS)를 보내주시거나, 평가받으실 자소서 초안을 입력해 주세요."
+        result["next_action"] = "CLASSIFY_REQUEST_AND_AVAILABLE_INPUTS"
+        result["needs_user_question"] = False
+        result["question_prompt"] = (
+            "현재 요청과 기존 대화에서 작업 범위와 가진 자료를 파악하십시오. "
+            "명확한 요청을 다시 확인받지 말고, 자료 없는 신규 작성·경험 정리는 대화로 시작하십시오. "
+            "기존 초안 평가·부분 수정에는 필요한 입력만 확인하며, 불명확한 경우에만 질문하십시오."
+        )
         return result

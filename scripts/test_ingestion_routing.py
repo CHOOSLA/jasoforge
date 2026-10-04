@@ -110,11 +110,12 @@ class TestSmartIngestionRouter(unittest.TestCase):
             self.assertEqual(res["next_action"], "LOAD_LOCAL_MATERIALS_AND_CONFIRM_SCOPE")
 
     def test_fallback_short_query(self):
-        """Case 5: 단순 인사나 불명확한 단문 질의 시 공고 링크 또는 초안 요청 유도 검증"""
+        """자료 없는 요청도 호스트가 대화 문맥에서 범위와 시작점을 판단한다."""
         user_in = "자소서 작성 도와줘"
         res = SmartIngestionRouter.route_input(user_in, has_notion_env=False)
         self.assertEqual(res["detected_case"], "CASE_FALLBACK_QUERY")
-        self.assertTrue(res["needs_user_question"])
+        self.assertEqual(res["next_action"], "CLASSIFY_REQUEST_AND_AVAILABLE_INPUTS")
+        self.assertFalse(res["needs_user_question"])
 
     def test_case_file_draft_routing(self):
         """Case 6: PDF나 TXT 파일 경로 유입 시 CASE_LOCAL_FILE 인식 및 로컬 감사 직행 검증"""
