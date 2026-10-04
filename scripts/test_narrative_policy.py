@@ -6,6 +6,7 @@ def module(name):
  spec=importlib.util.spec_from_file_location(name,ROOT/'scripts'/f'{name}.py')
  mod=importlib.util.module_from_spec(spec);spec.loader.exec_module(mod);return mod
 lint=module('lint');grade=module('grade');pipeline=module('run_pipeline')
+from evaluation_contract import ContractError, verify_manifest
 
 TEXT=(
 '서비스를 나누고 나니 다른 서비스가 가진 정보를 어떻게 가져오고 갱신할지가 고민이었습니다. '
@@ -52,7 +53,7 @@ class NarrativePolicyTests(unittest.TestCase):
   with tempfile.TemporaryDirectory() as d:
    base=Path(d);draft=base/'draft.txt';spec=base/'spec.json';packets=base/'packets'
    draft.write_text('===1===\n'+TEXT)
-   spec.write_text(json.dumps({'questions':{'1':{'min':1,'max':2000}},'proper_nouns':['서비스']}))
+   spec.write_text(json.dumps({'questions':{'1':{'min':1,'max':2000,'prompt':'문제 해결 경험을 설명하십시오.','applicable_axes':list('ABCDEFHI'),'axis_applicability_reasons':{a:'테스트용 평가 범위' for a in 'ABCDEFHI'}}},'proper_nouns':['서비스']}))
    run=subprocess.run([sys.executable,str(ROOT/'scripts/run_pipeline.py'),str(draft),str(spec),'--out-packets-dir',str(packets)],capture_output=True,text=True)
    self.assertEqual(run.returncode,0,run.stdout+run.stderr)
    hr=(packets/'hr_prompt_packet.txt').read_text();tech=(packets/'tech_prompt_packet.txt').read_text()
@@ -61,10 +62,9 @@ class NarrativePolicyTests(unittest.TestCase):
    self.assertNotIn('Typed Locked Rubric',tech)
    for name in ['hr_eval.json','tech_eval.json']:(packets/name).write_text('{}')
    with contextlib.redirect_stdout(io.StringIO()):
-    pipeline.verify_evaluation_integrity(packets/'hr_eval.json',packets/'tech_eval.json',draft)
+    verify_manifest(packets/'session_token.json',draft,spec,None,ROOT)
     draft.write_text('===1===\n수정된 본문')
-    with self.assertRaises(SystemExit) as caught:
-     pipeline.verify_evaluation_integrity(packets/'hr_eval.json',packets/'tech_eval.json',draft)
-   self.assertNotEqual(caught.exception.code,0)
+    with self.assertRaises(ContractError):
+     verify_manifest(packets/'session_token.json',draft,spec,None,ROOT)
 
 if __name__=='__main__':unittest.main()

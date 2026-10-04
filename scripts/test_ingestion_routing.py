@@ -11,6 +11,46 @@ from smart_router import SmartIngestionRouter
 
 class TestSmartIngestionRouter(unittest.TestCase):
 
+    def test_offline_never_requests_network_for_any_input_surface(self):
+        cases = [
+            "--offline https://example.com/guide",
+            "--offline https://app.notion.com/p/example",
+            "--offline 이즐IS팀 자소서 봐줘",
+            "--offline [지원부서: 이즐IS팀] [문항 1] 지원 경험을 검토해줘",
+            "--offline --sync-notion 카카오뱅크 자소서 봐줘",
+        ]
+        network_actions = {"READ_URL_AND_CLASSIFY", "READ_NOTION_PAGE_AND_CLASSIFY",
+                           "READ_NOTION_MATERIALS_AND_CONFIRM_SCOPE", "RESOLVE_ORGANIZATION_IDENTITY"}
+        for value in cases:
+            with self.subTest(value=value):
+                result = SmartIngestionRouter.route_input(value, True)
+                self.assertFalse(result["network_allowed"])
+                self.assertIsNone(result["search_query"])
+                self.assertNotIn(result["next_action"], network_actions)
+
+    def test_file_must_be_read_before_classification_even_with_sync(self):
+        for value in ("/tmp/작성가이드.pdf", "/tmp/합불기록.json --sync-notion", "/tmp/경험기록.md"):
+            with self.subTest(value=value):
+                result = SmartIngestionRouter.route_input(value, True)
+                self.assertEqual(result["next_action"], "READ_LOCAL_FILE_AND_CLASSIFY")
+                self.assertFalse(result["is_draft"])
+                self.assertFalse(result["content_classified"])
+
+    def test_long_reference_text_does_not_imply_draft_or_scoring(self):
+        result = SmartIngestionRouter.route_input("작성법 참고 자료입니다. " * 30, True)
+        self.assertEqual(result["next_action"], "CLASSIFY_TEXT_AND_CONFIRM_SCOPE")
+        self.assertFalse(result["is_draft"])
+        self.assertFalse(result["needs_user_question"])
+        self.assertIsNone(result["search_query"])
+        self.assertNotIn("테크 리드", result["question_prompt"])
+        self.assertNotIn("채점", result["question_prompt"])
+
+    def test_url_does_not_imply_job_posting_or_deep_research(self):
+        result = SmartIngestionRouter.route_input("https://example.com/case-study 읽어봐", True)
+        self.assertEqual(result["next_action"], "READ_URL_AND_CLASSIFY")
+        self.assertFalse(result["is_draft"])
+        self.assertFalse(result["content_classified"])
+
     def test_case_1_url_input(self):
         """Case 1: 자소설닷컴 또는 공식 채용 링크 유입 시 URL 감지 및 파싱 라우팅 검증"""
         inputs = [
@@ -22,7 +62,7 @@ class TestSmartIngestionRouter(unittest.TestCase):
             res = SmartIngestionRouter.route_input(user_in, has_notion_env=True)
             self.assertEqual(res["detected_case"], "CASE_1_URL", f"Failed for {user_in}")
             self.assertIsNotNone(res["url"])
-            self.assertEqual(res["next_action"], "PARSE_JOB_POSTING_AND_DEEP_RESEARCH")
+            self.assertEqual(res["next_action"], "READ_URL_AND_CLASSIFY")
 
     def test_case_2_draft_with_company(self):
         """Case 2: 본문 내에 기업명이 포함된 초안 유입 시 기업명 자동 역파싱 및 Audit-First 직행 검증"""
@@ -35,8 +75,8 @@ class TestSmartIngestionRouter(unittest.TestCase):
         res = SmartIngestionRouter.route_input(user_in, has_notion_env=True)
         self.assertEqual(res["detected_case"], "CASE_2_DRAFT_WITH_COMPANY")
         self.assertEqual(res["company"], "다우기술")
-        self.assertTrue(res["is_draft"])
-        self.assertEqual(res["next_action"], "LOOKUP_NOTION_AND_AUDIT_FIRST")
+        self.assertFalse(res["is_draft"])
+        self.assertEqual(res["next_action"], "CLASSIFY_TEXT_AND_CONFIRM_SCOPE")
         self.assertFalse(res["needs_user_question"])
 
     def test_case_3_draft_without_company(self):
@@ -50,10 +90,10 @@ class TestSmartIngestionRouter(unittest.TestCase):
         res = SmartIngestionRouter.route_input(user_in, has_notion_env=True)
         self.assertEqual(res["detected_case"], "CASE_3_DRAFT_WITHOUT_COMPANY")
         self.assertIsNone(res["company"])
-        self.assertTrue(res["is_draft"])
-        self.assertEqual(res["next_action"], "ASK_TARGET_COMPANY_BEFORE_AUDIT")
-        self.assertTrue(res["needs_user_question"], "Should prompt user for target company")
-        self.assertIn("어느 기업 및 직무", res["question_prompt"])
+        self.assertFalse(res["is_draft"])
+        self.assertEqual(res["next_action"], "CLASSIFY_TEXT_AND_CONFIRM_SCOPE")
+        self.assertFalse(res["needs_user_question"], "Classify and use existing context before asking")
+        self.assertIn("기존 문맥", res["question_prompt"])
 
     def test_case_4_company_call(self):
         """Case 4: 기업명이나 작업 지시어만 유입 시 노션 원장 조회 및 기존 초안 로드 라우팅 검증"""
@@ -67,7 +107,7 @@ class TestSmartIngestionRouter(unittest.TestCase):
             res = SmartIngestionRouter.route_input(user_in, has_notion_env=True)
             self.assertEqual(res["detected_case"], "CASE_4_COMPANY_CALL")
             self.assertEqual(res["company"], exp_comp)
-            self.assertEqual(res["next_action"], "LOOKUP_NOTION_AND_LOAD_EXISTING_DRAFT")
+            self.assertEqual(res["next_action"], "LOAD_LOCAL_MATERIALS_AND_CONFIRM_SCOPE")
 
     def test_fallback_short_query(self):
         """Case 5: 단순 인사나 불명확한 단문 질의 시 공고 링크 또는 초안 요청 유도 검증"""
@@ -77,14 +117,14 @@ class TestSmartIngestionRouter(unittest.TestCase):
         self.assertTrue(res["needs_user_question"])
 
     def test_case_file_draft_routing(self):
-        """Case 6: PDF나 TXT 파일 경로 유입 시 CASE_FILE_DRAFT 인식 및 로컬 감사 직행 검증"""
-        user_in = "/Users/choosla/Downloads/다우기술.pdf 이거 평가해봐"
+        """Case 6: PDF나 TXT 파일 경로 유입 시 CASE_LOCAL_FILE 인식 및 로컬 감사 직행 검증"""
+        user_in = "/Users/applicant/Downloads/다우기술.pdf 이거 평가해봐"
         res = SmartIngestionRouter.route_input(user_in, has_notion_env=True)
-        self.assertEqual(res["detected_case"], "CASE_FILE_DRAFT")
-        self.assertEqual(res["file_path"], "/Users/choosla/Downloads/다우기술.pdf")
+        self.assertEqual(res["detected_case"], "CASE_LOCAL_FILE")
+        self.assertEqual(res["file_path"], "/Users/applicant/Downloads/다우기술.pdf")
         self.assertEqual(res["company"], "다우기술")
         self.assertEqual(res["mode"], "LOCAL", "File path audit should default to LOCAL mode")
-        self.assertEqual(res["next_action"], "LOCAL_AUDIT_FIRST", "Should bypass Notion and audit locally")
+        self.assertEqual(res["next_action"], "READ_LOCAL_FILE_AND_CLASSIFY")
 
     def test_execution_mode_flags(self):
         """Case 7: --local 및 --sync-notion 플래그에 따른 결정론적 분기 검증"""
@@ -92,22 +132,22 @@ class TestSmartIngestionRouter(unittest.TestCase):
         local_in = "[문항 1] 다우기술 지원동기 ... (200자 이상 본문) " + "테스트 " * 40 + " --local"
         res_local = SmartIngestionRouter.route_input(local_in, has_notion_env=True)
         self.assertEqual(res_local["mode"], "LOCAL")
-        self.assertEqual(res_local["next_action"], "LOCAL_AUDIT_FIRST")
+        self.assertEqual(res_local["next_action"], "CLASSIFY_TEXT_AND_CONFIRM_SCOPE")
 
         # --sync-notion 강제 시 노션 조회 활성화
-        sync_in = "/Users/choosla/Downloads/다우기술.pdf --sync-notion"
+        sync_in = "/Users/applicant/Downloads/다우기술.pdf --sync-notion"
         res_sync = SmartIngestionRouter.route_input(sync_in, has_notion_env=True)
         self.assertEqual(res_sync["mode"], "NOTION_SYNC")
-        self.assertEqual(res_sync["next_action"], "LOOKUP_NOTION_AND_AUDIT_FIRST")
+        self.assertEqual(res_sync["next_action"], "READ_LOCAL_FILE_AND_CLASSIFY")
 
     def test_case_notion_draft_url(self):
-        """Case 8: 노션 페이지 링크(notion.so/...) 유입 시 CASE_NOTION_DRAFT_URL 인식 검증"""
+        """Case 8: 노션 페이지 링크(notion.so/...) 유입 시 CASE_NOTION_PAGE_URL 인식 검증"""
         user_in = "https://www.notion.so/my-workspace/daou-draft-31bf58c3261e81d6aad0e3c2bdb637e3 다우기술 이거 평가해봐"
         res = SmartIngestionRouter.route_input(user_in, has_notion_env=True)
-        self.assertEqual(res["detected_case"], "CASE_NOTION_DRAFT_URL")
-        self.assertTrue(res["is_draft"])
+        self.assertEqual(res["detected_case"], "CASE_NOTION_PAGE_URL")
+        self.assertFalse(res["is_draft"])
         self.assertEqual(res["company"], "다우기술")
-        self.assertEqual(res["next_action"], "READ_NOTION_PAGE_AND_AUDIT_FIRST")
+        self.assertEqual(res["next_action"], "READ_NOTION_PAGE_AND_CLASSIFY")
 
     def test_case_draft_with_team_resolver(self):
         """Case 9: 모호한 팀명(이즐IS팀)이 포함된 초안 유입 시 3단계 점진적 리졸버 트리거 검증"""
@@ -120,10 +160,10 @@ class TestSmartIngestionRouter(unittest.TestCase):
         res = SmartIngestionRouter.route_input(user_in, has_notion_env=True)
         self.assertEqual(res["detected_case"], "CASE_DRAFT_WITH_TEAM_RESOLVER")
         self.assertEqual(res["candidate_team"], "이즐IS팀")
-        self.assertEqual(res["search_query"], "이즐IS팀 채용")
+        self.assertIsNone(res["search_query"])
         self.assertTrue(res["needs_identity_resolution"])
-        self.assertEqual(res["next_action"], "RESOLVE_ORGANIZATION_IDENTITY")
-        self.assertTrue(res["needs_user_question"])
+        self.assertEqual(res["next_action"], "CLASSIFY_TEXT_AND_CONFIRM_SCOPE")
+        self.assertFalse(res["needs_user_question"])
         self.assertIn("이즐IS팀", res["question_prompt"])
 
     def test_case_team_call_resolver(self):
@@ -159,7 +199,7 @@ class TestSmartIngestionRouter(unittest.TestCase):
         self.assertEqual(res["detected_case"], "CASE_3_DRAFT_WITHOUT_COMPANY")
         self.assertIsNone(res["candidate_team"])
         self.assertFalse(res["needs_identity_resolution"])
-        self.assertEqual(res["next_action"], "ASK_TARGET_COMPANY_BEFORE_AUDIT")
+        self.assertEqual(res["next_action"], "CLASSIFY_TEXT_AND_CONFIRM_SCOPE")
 
     def test_organization_contract_and_prompt_formatting(self):
         """Case 12: 조직 정체성 이원화 계약 생성 및 Tier 3 확인 프롬프트 포맷팅 무결성 검증"""

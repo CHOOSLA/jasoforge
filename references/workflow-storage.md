@@ -1,0 +1,85 @@
+# 지원 작업 저장·회귀·경험 되먹임
+
+전체 실행과 평가 요청에서 읽는다. 파일은 호스트 에이전트가 만들고 관리한다. 사용자가 JSON을 작성하거나 Python 명령을 직접 실행할 필요는 없다. 지원서마다 작업 디렉터리를 정하고 작업 시작 시 기존 파일부터 확인한다.
+
+## 작업 구조
+
+```text
+<지원서키>/
+  research.md                # 회사/사업부/직무 조사 원문·출처·확인일
+  experience_vault.md         # 기존 경험과 새 확인 사실·미확인 해석을 구별
+  score_ledger.json           # 검증한 실행을 append-only로 누적
+  revision_log.json           # 원고 수정 세션과 변경 이유
+  versions/v1/
+    draft.txt                # ===1=== 구분자와 제출문
+    spec.json                # 실제 문항·규격·평가 적용 범위
+    context.json             # 조사와 경험 출처
+    report.md                # 5단 진단 리포트
+    runs/<run_id>/            # 패킷·토큰·HR/TECH 결과·호출 기록·기계 집계
+```
+
+지원서키는 시즌·채용 법인·전형·직무를 구별한다. 예: `2026H2_가상회사_신입_백엔드`. 기존 키가 있으면 유지하며 이름 유사성으로 합치지 않는다. 표기는 예시이고 개인정보를 불필요하게 파일명에 넣지 않는다.
+
+기존 초안은 원본 파일·버전과 해시를 먼저 보존한다. 수정안은 v2 등 새 버전에 저장하고, 평가만 요청받았으면 원본을 고치지 않는다. 한 버전에 여러 평가를 할 수 있으므로 run_id로 구별한다. 재평가 시 입력·패킷·결과 경로를 재사용해 이전 실행을 덮어쓰지 않는다. `run_pipeline.py --out-packets-dir <새 경로>`를 쓰면 지원 폴더 안에 패킷을 둘 수 있다. 기본 위치는 초안 파일 옆의 scratch/runs/<run_id>/packets다.
+
+## 독립 평가 실행 기록
+
+호스트는 실제 호출 후 `evaluation_execution.json`을 작성한다. 도구가 반환한 호출 식별자를 쓰며 모델이 공개되지 않으면 `unavailable`이라고 적는다. 예시 값을 실행 증거로 복사하지 않는다.
+
+```json
+{
+  "run_id": "생성된 실제 run_id",
+  "evaluators": {
+    "HR": {"call_id": "실제 HR 호출 식별자", "model": "실제 모델 또는 unavailable", "started_at": "실제 ISO 시각", "inherited_context": false, "packet_sha256": "실제 HR 패킷 해시"},
+    "TECH": {"call_id": "실제 TECH 호출 식별자", "model": "실제 모델 또는 unavailable", "started_at": "실제 ISO 시각", "inherited_context": false, "packet_sha256": "실제 TECH 패킷 해시"}
+  }
+}
+```
+
+각 평가자는 해당 패킷만 받는다. 실행 기록은 독립 호출의 추적 자료이며, 필드를 채우는 것만으로 실제 격리가 증명되지는 않는다. 사용할 도구가 없으면 미실행으로 남기고 독립 평가 원장에 넣지 않는다.
+
+## 점수 원장 기록
+
+집계를 성공한 뒤 다음 명령을 실행한다. **새 평가를 생성하는 명령이 아니라 이미 수행한 평가를 검증·기록하는 명령**이다.
+
+```sh
+python3 scripts/record_review.py /path/versions/v1/draft.txt /path/versions/v1/spec.json \
+  --context /path/versions/v1/context.json \
+  --hr-eval /path/run/hr_eval.json --tech-eval /path/run/tech_eval.json \
+  --session-token /path/run/session_token.json --execution-log /path/run/evaluation_execution.json \
+  --application-key 2026H2_가상회사_신입_백엔드 --version v1 --ledger /path/score_ledger.json
+```
+
+원장은 `schema_version: 1`, `application_key`, `runs`를 가진다. 각 run은 평가 버전·원고 버전·시각·토큰과 입력 해시·원고/규격/context 스냅샷·작성 축별 점수·규격·선택적 근거 대조·집계·실행 기록을 보존한다. 같은 run의 동일 기록은 중복 추가하지 않으며 내용이 다르면 거부한다. 다른 지원서키나 알 수 없는 구형 스키마도 거부하고 원본을 보존한다. 구형 원장은 별도로 보관하고 새 원장 경로를 정하거나 명시적으로 변환한다. 과거 평가를 현재 유효 평가로 바꾸지 않는다.
+
+## 변경 로그와 회귀 검토
+
+`revision_log.json`은 에이전트가 관리한다. `application_key`와 `revisions` 배열을 두고 수정 세션마다 다음을 추가한다.
+
+- 시각, 이전/다음 버전과 원고 해시, 해당 평가 run_id
+- 작성자, 실제 세션 ID(없으면 로컬 생성임을 명시), 유형(feat/refactor/fix/cut/wip), Scope(변경 문항·섹션)
+- 대상 버전 경로 하나와, Notion 반영 시 실제 수정한 활성 버전 URL 하나. 다른 버전은 별도 항목으로 기록하고 이후 활성 버전이 바뀌어도 과거 대상을 바꾸지 않는다.
+- What: 실제 바꾼 문항·문장 또는 구조
+- Why: 문항 요구·새 사실·사용자 지시·평가 지적 중 수정 근거
+- Before/After: 달라진 문장과 필요한 맥락
+- Regression: 빠진 명시 요구, 사실 확대, 핵심 판단 연결의 손실 여부와 확인 결과
+
+점수 원장과 달리 이 파일은 내용 판단을 기록한다. 숫자가 내려갔다고 자동 원복하지 않고, 규격·루브릭·가중치·적용 축이 달라졌으면 점수 비교의 한계를 적는다. 점수만 오른 새 문장을 사실 검증 없이 채택하지 않는다. 입력을 바꾼 뒤 이전 평가를 붙이지 않는다.
+
+기계 집계는 `grade.py --out-json aggregate.json`의 문항별 HR/TECH·가중 지수와 역할 평균을 그대로 사용한다. `record_review.py`도 같은 함수의 `aggregate_summary`와 독립 TECH 면접 검토를 원장에 보존한다. 호스트가 숫자를 다시 계산해 덮어쓰지 않는다. 상세 입력 이전은 [구형 자료 이전](migration.md)을 따른다.
+
+## 경험 되먹임
+
+경험 원장에는 사건 ID, 기존 원문/코드/문서 위치, 본인 역할, 확인된 행동·결과, 상태, 확인 주체·시각을 둔다. 상태는 `확인`, `미확인`, `모순`을 구분한다.
+
+작성 중 얻은 새 사실은 해당 사건에 출처와 함께 추가한다. 사용자에게 받은 추가 답변은 답변 시점과 확인 범위를 기록한다. AI의 해석·제안은 별도 잠정 항목으로 남긴다. 자소서에서 표현을 바꿨다는 이유로 과거 경험 원문을 덮어쓰지 않는다. 모순은 양쪽 근거를 보존하고 확인 질문을 남긴다. 새로운 사실이 없으면 원장을 채우려고 내용을 발명하지 않는다.
+
+## Notion 반영
+
+명시적으로 연동을 요청받은 범위에서 [Notion 계약](notion_schema.md)을 따른다. 로컬 run·버전·지원서키를 해당 DB 관계에 연결하고 원고는 버전 페이지 본문에 쓴다. 수정 세션마다 변경 로그 한 건을 남기고 실제 작성된 페이지를 다시 읽어 확인한다. 일부 반영 실패 시 성공/실패 위치와 재시도 항목을 남겨 중복 생성을 피한다.
+
+## v5 기록
+
+원장 외형 schema_version=1은 유지하고 새 run에 evaluation_version=5.0과 집계 schema_version=2를 저장한다. 기존 run은 바꾸지 않는다. v4의 G/J 포함 총점과 v5 작성 점수를 동일 척도로 비교하지 않는다. 경험은 사용자 진술/제공 기록/코드/자소서 파생을 구분해 남긴다. 원장이 없는 사용자는 현재 제공한 진술부터 출처·시각을 기록하면 되며, 원장을 채우기 위한 과도한 질문이나 증빙 요구를 하지 않는다.
+
+개인 경험 자료와 회사 맥락이 없는 첫 평가에서는 context.json 없이 패킷·집계·원장 기록까지 진행할 수 있다. record_review.py의 --context도 선택이며, 패킷 생성 때 context를 제공했다면 기록에도 같은 파일이 필요하다.

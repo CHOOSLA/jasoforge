@@ -1,52 +1,64 @@
 {
-  "company": "뱅크웨어글로벌",
-  "role": "코어뱅킹 개발자",
+  "company": "가상회사(규격 예시)",
+  "role": "소프트웨어 개발 신입",
   "length_metric_type": "chars_with_space",
   "blind_compliance_level": "NONE",
-  "target_role_domain_nature": "COMMERCIAL_PRODUCTION",
-  "recruitment_archetype": "FINTECH_CORE",
-  "organization_contract": {
-    "declared_target": "뱅크웨어글로벌 코어뱅킹",
-    "entity_pattern": "DIRECT_INHOUSE",
-    "parent_legal_entity": "뱅크웨어글로벌",
-    "client_service_domain": "글로벌 금융 코어뱅킹 솔루션"
-  },
-  "key_responsibilities": [
-    "1순위 Core: 글로벌 금융사 코어뱅킹 계정계 시스템 프레임워크 설계 및 원장 트랜잭션 개발",
-    "2순위 Core: 금융 대내외 연계 솔루션(BX-Integrator) 및 대용량 배치 처리 안정화",
-    "3순위 Support: 시스템 운영 모니터링 및 개발자 지원 도구 개선"
-  ],
-  "required_hard_skills": ["Java", "C++", "RDBMS", "SQL"],
-  "banned": ["OO대학교", "[가-힣]+대학교", "[가-힣]+학과", "졸업논문"],
-  "proper_nouns": [
-    "뱅크웨어글로벌", "코어뱅킹", "BX-Integrator", "Android", "iOS",
-    "JNI", "OpenAPI", "TypeScript", "ERP", "ReleaseByteArrayElements",
-    "ExamplePage", "Storybook", "Java", "C++", "MVP", "Props", "OWASP", "SSL Pinning"
-  ],
+  "banned": [],
+  "proper_nouns": [],
   "questions": {
     "1": {
-      "min": 400, "max": 800, "basis": "with_spaces",
-      "required_items": {
-        "어려움 극복을 위해 취했던 행동": ["추가", "호출하도록", "맞췄", "해제"],
-        "수행 결과물": ["사라졌", "해결", "비정상 종료"],
-        "결과물 도출을 위한 노력": ["확인했습니다", "공부", "기본서", "조사"]
-      }
+      "prompt": "다른 사람의 불편을 발견하고 개선한 경험을 설명해 주세요.",
+      "min": 0,
+      "max": 700,
+      "basis": "with_spaces",
+      "spec_source": "가상 테스트 문항. 실제 공고 사용 시 원문 출처로 교체.",
+      "applicable_axes": [
+        "A",
+        "B",
+        "C",
+        "E",
+        "F",
+        "H"
+      ],
+      "axis_scope_reason": "경험 설명 질문. 회사 연결(D)과 가치관 일반화(I)는 요구하지 않는다.",
+      "required_items": {},
+      "axis_applicability_reasons": {
+        "A": "경험에서 필요한 맥락과 개인 행동를 평가한다.",
+        "B": "주장과 판단의 이유를 평가한다.",
+        "C": "본인 역할과 확인된 결과를 평가한다.",
+        "D": "회사·직무 연결를 이 문항은 요구하지 않아 제외한다.",
+        "E": "질문 호응과 읽기 쉬움를 평가한다.",
+        "F": "질문의 명시 요구를 평가한다.",
+        "H": "구체적인 경험 또는 고유한 논거를 평가한다.",
+        "I": "요구한 가치관·태도를 이 문항은 요구하지 않아 제외한다."
+      },
+      "spec_confirmation": "CONFIRMED"
     },
     "2": {
-      "min": 400, "max": 800, "basis": "with_spaces",
-      "required_items": {
-        "의견 교류": ["설명했습니다", "제안", "논의", "함께 확인"],
-        "합의 도출": ["합의", "받아들"],
-        "그룹에 미친 영향": ["팀원들은", "갱신", "확인했습니다"]
-      }
-    },
-    "3": {
-      "min": 400, "max": 800, "basis": "with_spaces",
-      "required_items": {
-        "갖추어 온 역량": ["해왔습니다", "전담", "맡아"],
-        "근거 기반 구체 기술": ["10개 서비스", "OpenAPI", "TypeScript", "인증서", "OWASP"],
-        "지원 분야 연결": ["코어뱅킹", "BX-Integrator", "3rd Party"]
-      }
+      "prompt": "최근 사회 이슈 한 가지를 선택하고 본인의 견해를 기술해 주세요.",
+      "min": 0,
+      "max": 1000,
+      "basis": "with_spaces",
+      "spec_source": "가상 테스트 문항. 실제 공고 사용 시 원문 출처로 교체.",
+      "applicable_axes": [
+        "B",
+        "E",
+        "F",
+        "H"
+      ],
+      "axis_scope_reason": "논지·근거·견해 검토. 기술 행동/결과나 회사 기여를 요구하지 않는다.",
+      "required_items": {},
+      "axis_applicability_reasons": {
+        "A": "경험에서 필요한 맥락과 개인 행동를 이 문항은 요구하지 않아 제외한다.",
+        "B": "주장과 판단의 이유를 평가한다.",
+        "C": "본인 역할과 확인된 결과를 이 문항은 요구하지 않아 제외한다.",
+        "D": "회사·직무 연결를 이 문항은 요구하지 않아 제외한다.",
+        "E": "질문 호응과 읽기 쉬움를 평가한다.",
+        "F": "질문의 명시 요구를 평가한다.",
+        "H": "구체적인 경험 또는 고유한 논거를 평가한다.",
+        "I": "요구한 가치관·태도를 이 문항은 요구하지 않아 제외한다."
+      },
+      "spec_confirmation": "CONFIRMED"
     }
   }
 }

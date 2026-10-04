@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 """자소서 기계 검사 (lint.py v3.4).
-판단이 필요 없는 결정적 규격(글자수, 금지어, 키워드 충족도, 본문 30% 룰, 문장 리듬)만 본다.
+실제 공고에 명시된 분량·금지어를 검사하고, 표현 탐색 결과는 참고 정보로 제공한다.
 표준 라이브러리만 사용합니다.
 """
 import re, sys, json, unicodedata
 from pathlib import Path
+from evaluation_contract import ContractError, load_draft, read_json, validate_spec
 
 def load(path):
-    parts = re.split(r'^===(\S+)===\s*$', Path(path).read_text(encoding='utf-8'), flags=re.M)
-    return {parts[i]: parts[i+1].strip('\n') for i in range(1, len(parts), 2)}
+    return load_draft(path)
 
 def count(body):
     return len(body), len(re.sub(r'\s', '', body))
@@ -18,20 +18,22 @@ def count_metrics(body, metric_type="chars_with_space"):
     지원하는 글자수/바이트 계량 규격:
     - chars_with_space: 공백 포함 글자수 (기본)
     - chars_without_space: 공백 제외 글자수
-    - bytes_euckr: 국내 대기업(삼성, 현대차 등) ATS 표준 시뮬레이션 (Non-ASCII 2byte, ASCII 1byte, 개행 CRLF 2byte)
+    - bytes_euckr: Python euc-kr 인코딩 바이트 수 (개행 CRLF)
+    - legacy_nonascii_2byte: 비ASCII 2byte 시뮬레이션 (실제 ATS 규격 확인 필요)
     - bytes_utf8: UTF-8 바이트 (한글 3byte, 영수 1byte)
     """
     n_all = len(body)
     n_ns = len(re.sub(r'\s', '', body))
     crlf_body = body.replace('\r\n', '\n').replace('\n', '\r\n')
     
-    # 1. ATS 보수적 계량: 삼성/현대차 등 대기업 웹폼 JS 카운터 (charCode > 127 ? 2 : 1)
+    # 1. 레거시 바이트 근사값. 기업명만으로 이 계량을 선택하지 않는다.
     b_ats = sum(2 if ord(c) > 127 else 1 for c in crlf_body)
     
     # 2. Strict EUC-KR 호환성 검사 (비호환 문자 검출)
     unsupported_chars = []
+    b_euckr = None
     try:
-        crlf_body.encode('euc-kr')
+        b_euckr = len(crlf_body.encode('euc-kr'))
     except UnicodeEncodeError:
         for ch in crlf_body:
             try:
@@ -40,15 +42,16 @@ def count_metrics(body, metric_type="chars_with_space"):
                 if ch not in unsupported_chars:
                     unsupported_chars.append(ch)
                     
-    b_euckr = b_ats  # 언더카운팅 마감 폭탄 방지를 위해 보수적 ATS 시뮬레이션 계량 적용
     b_utf8 = len(crlf_body.encode('utf-8'))
     
-    summary = f"공백포함 {n_all}자 / 공백제외 {n_ns}자 / ATS(EUC-KR) {b_euckr}B / UTF-8 {b_utf8}B"
+    summary = f"공백포함 {n_all}자 / 공백제외 {n_ns}자 / EUC-KR {b_euckr if b_euckr is not None else '인코딩 불가'}B / UTF-8 {b_utf8}B"
     if unsupported_chars:
         summary += f" [⚠️ Strict EUC-KR 비호환 문자: {', '.join(unsupported_chars[:5])}]"
         
     if metric_type == "bytes_euckr":
-        return b_euckr, summary, "ATS(EUC-KR) Bytes", unsupported_chars
+        return b_euckr, summary, "EUC-KR Bytes", unsupported_chars
+    elif metric_type == "legacy_nonascii_2byte":
+        return b_ats, summary, "legacy 비ASCII 2바이트 근사 (ATS 검증 필요)", unsupported_chars
     elif metric_type == "bytes_utf8":
         return b_utf8, summary, "UTF-8 Bytes", unsupported_chars
     elif metric_type == "chars_without_space":
@@ -118,37 +121,30 @@ def check(qid, body, spec, banned, proper_nouns, blind_level="NONE"):
     current_val, summary, unit_name, unsupported_chars = count_metrics(body, metric_type)
     out['info']['계량규격'] = f"{unit_name} 기준 ({summary})"
     if metric_type == "bytes_euckr" and unsupported_chars:
-        out['issues'].append(f'WARN Strict EUC-KR 인코딩 불가 특수문자 발견 ({len(unsupported_chars)}종: {unsupported_chars[:5]}): 대기업 ATS 환경에 따라 깨짐 또는 바이트 오차 가능성')
+        out['issues'].append(f'FAIL EUC-KR 인코딩 불가 문자 ({len(unsupported_chars)}종: {unsupported_chars[:5]}): 지정 인코딩으로 계량할 수 없습니다.')
     
     lo, hi = spec.get('min'), spec.get('max')
-    # 상한선 기반 하드 하한선(80%) 및 소프트 안전선(85%)
-    if not lo and hi:
-        lo = int(hi * 0.8)
-
-    if lo and current_val < lo:
-        out['issues'].append(f'FAIL 글자수/용량 미달: {current_val} < {lo} ({unit_name}, 상한 대비 80% 미만)')
-    elif hi and int(hi * 0.8) <= current_val < int(hi * 0.85):
-        out['info']['압축서술구제'] = f"{current_val}/{hi} ({current_val/hi:.1%}) — 고밀도 압축 서술 구간 (핵심 4요소 충족 시 G축 5점 만점 구제 대상)"
-    if hi and current_val > hi:
+    # 최소 분량은 실제 spec.min이 있을 때만 적용한다.
+    if lo is not None and current_val is not None and current_val < lo:
+        out['issues'].append(f'FAIL 글자수/용량 미달: {current_val} < {lo} ({unit_name})')
+    if hi is not None and current_val is not None and current_val > hi:
         out['issues'].append(f'FAIL 글자수/용량 초과: {current_val} > {hi} ({unit_name})')
 
-    # 작성방법 항목 커버리지 — 키워드 0건이면 확실한 누락 신호
+    # 키워드 미발견은 누락의 확증이 아니며 문맥을 검토한다.
     for item, kws in spec.get('required_items', {}).items():
         hits = [k for k in kws if k in body]
         if not hits:
-            out['issues'].append(f'WARN 작성방법 항목 근거 없음: "{item}" (탐색어 {kws})')
+            out['issues'].append(f'INFO 작성방법 항목 탐색어 미발견 (문맥 확인): "{item}" (탐색어 {kws})')
         else:
-            out['info'].setdefault('항목충족', []).append(f'{item} ← {hits}')
+            out['info'].setdefault('탐색어발견(충족확정아님)', []).append(f'{item} ← {hits}')
 
     # 대안 비교가 실제 문항 요구라면 required_items에서 함께 확인한다.
     # 과거 discarded_alternative_keywords는 자동 문체·서사 조건으로 사용하지 않는다.
 
     # 블라인드 레벨 분기 적용
     effective_banned = list(banned)
-    if blind_level == "ACADEMIC_RND_PERMISSIVE":
-        # R&D 직무: 졸업논문, 연구실(Lab), 학회 발표 허용
-        effective_banned = [b for b in effective_banned if "논문" not in b and "연구실" not in b]
-    elif blind_level == "STRICT_PUBLIC_INSTITUTION":
+    # Explicitly supplied prohibitions always apply, regardless of profile.
+    if blind_level == "STRICT_PUBLIC_INSTITUTION":
         for pat, desc in STRICT_PUBLIC_PATTERNS:
             if re.search(pat, body):
                 out['issues'].append(f'FAIL {desc} 발견: /{pat}/')
@@ -163,8 +159,6 @@ def check(qid, body, spec, banned, proper_nouns, blind_level="NONE"):
     # 1. 문항 단위 고유명사 밀도 검사 (Macro Specificity)
     matched_pns = [pn for pn in proper_nouns if pn in body]
     out['info']['고유명사'] = f'{len(matched_pns)}개 식별 ({", ".join(matched_pns[:5])}{"..." if len(matched_pns) > 5 else ""})'
-    if len(matched_pns) == 0:
-        out['issues'].append('WARN 문항 전체에 회사/도메인 고유명사 부재 — 어느 회사에나 붙을 수 있는 일반론 자소서 의심')
 
     # 2. 상투적 클리셰 템플릿 탐지 (Boilerplate / Cliche Detection)
     COMMON_CLICHES = [
@@ -236,23 +230,23 @@ if __name__ == '__main__':
     if len(sys.argv) < 3:
         print("사용법: python3 lint.py <draft.txt> <spec.json>")
         sys.exit(1)
-    draft = load(sys.argv[1])
-    spec = json.loads(Path(sys.argv[2]).read_text(encoding='utf-8'))
+    try:
+        draft = load(sys.argv[1])
+        spec = read_json(sys.argv[2])
+        validate_spec(spec, draft)
+    except (ContractError, OSError, ValueError) as exc:
+        print(f"FAIL 입력 규격: {exc}")
+        sys.exit(1)
     banned = spec.get('banned', [])
     pn = spec.get('proper_nouns', [])
     blind_level = spec.get('blind_compliance_level', 'NONE')
-    spec_questions = spec.get('questions', {})
-    
-    # 문항 분할 단언 계약 검사 (Hard Assertion Gate)
-    if spec_questions and len(draft) != len(spec_questions):
-        print(f"\n🚨 CRITICAL FAIL [Segmentation Mismatch]: 초안 파싱 문항 수({len(draft)})와 spec.json 문항 수({len(spec_questions)})가 불일치합니다. 구분자(===qid===)를 점검하십시오.")
-        sys.exit(1)
+    spec_questions = spec['questions']
 
     fails = 0
     total_typo_count = 0
     results = []
     for qid, body in draft.items():
-        q_spec = spec_questions.get(qid, {})
+        q_spec = dict(spec_questions[qid])
         # 전역 length_metric_type 상속
         if 'length_metric_type' not in q_spec and 'length_metric_type' in spec:
             q_spec['length_metric_type'] = spec['length_metric_type']
@@ -291,8 +285,7 @@ if __name__ == '__main__':
             print(f"\nℹ️ INFO [Closing Repetition]: 전체 {len(draft)}개 문항의 마무리가 모두 상투적 기여/노력 다짐({[c[1] for c in closings]})으로 반복됩니다. 문항에 필요한 결말인지 읽고 확인하십시오.")
 
     if total_typo_count >= 3:
-        print(f"\n🚨 CRITICAL FAIL [Knockout Red Flag]: 지원서 전체에서 치명적 오탈자가 {total_typo_count}건 누적되었습니다. (3건 이상 방치 시 Step 5 사법 심판에서 자동 탈락/Hard Clamp 대상이 되므로 전수 교정 필수)")
-        fails += 1
+        print(f"\nWARN 등록된 오탈자 유형 {total_typo_count}건 발견: 원문 문맥을 확인하고 교정하십시오. 채용 결격으로 판정하지 않습니다.")
 
     print(f"\n{'='*52}\nFAIL {fails}건")
     sys.exit(1 if fails else 0)

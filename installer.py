@@ -21,7 +21,7 @@ import time
 import subprocess
 from pathlib import Path
 
-VERSION = "3.5.0"
+VERSION = "5.0.0"
 SKILL_NAME = "jaso-pipeline"
 
 # ANSI Terminal Colors
@@ -58,7 +58,15 @@ def verify_source(source_dir: Path) -> bool:
         source_dir / "SKILL.md",
         source_dir / "scripts" / "lint.py",
         source_dir / "scripts" / "grade.py",
+        source_dir / "scripts" / "evaluation_contract.py",
         source_dir / "scripts" / "run_pipeline.py",
+        source_dir / "scripts" / "record_review.py",
+        source_dir / "references" / "workflow-storage.md",
+        source_dir / "references" / "research-context.md",
+        source_dir / "references" / "diagnostic-report.md",
+        source_dir / "references" / "migration.md",
+        source_dir / "references" / "rubric_hr.json",
+        source_dir / "references" / "question-flows.md",
         source_dir / "references" / "rubric_tech.json",
     ]
     for rf in required_files:
@@ -191,10 +199,11 @@ def main():
     print(f"\n{BOLD}Verifying skill artifacts...{RESET}")
     artifacts = [
         ("Deterministic Lint Engine", "scripts/lint.py"),
-        ("Prosecutor-Judge Engine", "scripts/grade.py"),
-        ("E2E Pipeline Orchestrator", "scripts/run_pipeline.py"),
-        ("Judicial Rubric Contracts", "references/rubric_tech.json"),
-        ("Skill Protocol Spec", "SKILL.md"),
+        ("Review Contract Aggregator", "scripts/grade.py"),
+        ("Review Packet Builder", "scripts/run_pipeline.py"),
+        ("Evidence Review Rubrics", "references/rubric_tech.json"),
+        ("Validated Review Ledger", "scripts/record_review.py"),
+        ("Agent Workflow", "SKILL.md"),
     ]
     for label, rel_path in artifacts:
         f_exists = (source_dir / rel_path).exists()
@@ -216,7 +225,7 @@ def main():
     elapsed_ms = int((time.time() - start_time) * 1000)
     summary_parts = []
     if success_count > 0:
-        summary_parts.append(f"{success_count} installed")
+        summary_parts.append(f"{success_count} would install" if args.dry_run else f"{success_count} installed")
     if skipped_source_count > 0:
         summary_parts.append(f"{skipped_source_count} source preserved")
 

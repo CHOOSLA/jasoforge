@@ -3,7 +3,8 @@
 JasoForge Smart Ingestion Router (smart_router.py)
 ==================================================
 사용자의 다양한 첫 입력 형태(URL, 자소서 본문, 기업명 호출)를 결정론적으로 감지하고
-최적의 파이프라인 경로(Audit-First vs From-Scratch, 노션 조회 여부)를 결정합니다.
+자료의 위치를 식별하고 내용을 읽어 종류와 요청 범위를 확인할 다음 단계를 안내합니다.
+분류 결과만으로 평가·작성·동기화를 시작하지 않습니다.
 """
 
 import re
@@ -18,7 +19,7 @@ class SmartIngestionRouter:
 
     # 1-0. 노션 페이지 URL 패턴 (자소서 초안 페이지 직접 인입)
     NOTION_URL_PATTERN = re.compile(
-        r'https?://(?:www\.)?notion\.(?:so|site)/[a-zA-Z0-9\-._~:/?#[\]@!$&\'()*+,;=%]+',
+        r'https?://(?:(?:www\.)?notion\.(?:so|site)|(?:app\.)?notion\.com)/[a-zA-Z0-9\-._~:/?#[\]@!$&\'()*+,;=%]+',
         re.IGNORECASE
     )
 
@@ -56,6 +57,7 @@ class SmartIngestionRouter:
 
     # 4. 실행 모드 제어 플래그
     LOCAL_FLAGS = ["--local", "-l", "--quick", "--offline", "로컬", "로컬모드", "노션없이", "오프라인"]
+    OFFLINE_FLAGS = ["--offline", "오프라인"]
     NOTION_FLAGS = ["--sync-notion", "-s", "--notion", "노션동기화", "노션연동", "노션에저장"]
 
     @classmethod
@@ -64,7 +66,7 @@ class SmartIngestionRouter:
         candidate_team: str,
         parent_company: Optional[str] = None,
         service_domain: Optional[str] = None,
-        work_env: str = "SM(운영) / 신규 개발"
+        work_env: str = "확인된 담당 업무"
     ) -> str:
         """3단계 점진적 조직 정체성 확인 질문 프로토콜 (Tier 3) 포맷팅"""
         if parent_company and service_domain:
@@ -84,7 +86,7 @@ class SmartIngestionRouter:
             return (
                 f"🔍 **[{candidate_team}]**의 공식 채용 법인을 명확히 확인하기 어렵습니다.\n"
                 f"👉 해당 지원서의 **채용 법인(회사명)**과 **구체적인 담당 직무(운영/개발 등)**를 알려주시면 "
-                f"정확한 직무 엣지케이스와 루브릭을 세팅하겠습니다."
+                f"문항과 경험의 관련성을 확인하겠습니다."
             )
 
     @classmethod
@@ -111,8 +113,9 @@ class SmartIngestionRouter:
         text = user_input.strip()
 
         # 모드 판별 (--local vs --sync-notion vs AUTO)
-        is_local_flag = any(flag in text for flag in cls.LOCAL_FLAGS)
-        is_notion_flag = any(flag in text for flag in cls.NOTION_FLAGS)
+        is_local_flag = any(re.search(r"(?<!\S)" + re.escape(flag) + r"(?!\S)", text) for flag in cls.LOCAL_FLAGS)
+        is_offline_flag = any(re.search(r"(?<!\S)" + re.escape(flag) + r"(?!\S)", text) for flag in cls.OFFLINE_FLAGS)
+        is_notion_flag = any(re.search(r"(?<!\S)" + re.escape(flag) + r"(?!\S)", text) for flag in cls.NOTION_FLAGS)
         if is_local_flag:
             mode = "LOCAL"
         elif is_notion_flag:
@@ -123,6 +126,8 @@ class SmartIngestionRouter:
         result = {
             "raw_input": text,
             "has_notion_env": has_notion_env,
+            "network_allowed": not is_offline_flag,
+            "content_classified": False,
             "mode": mode,
             "detected_case": None,
             "company": None,
@@ -137,48 +142,61 @@ class SmartIngestionRouter:
             "question_prompt": None
         }
 
+        # 스킬 유지보수 요청은 지원서 작성·채점·동기화 실행 요청이 아니다.
+        if re.search(r'(?:스킬|파이프라인|jaso[-_]pipeline).{0,80}(?:검증|수정|다듬|개선|검토|고쳐|점검)', text, re.I | re.S):
+            result["detected_case"] = "CASE_SKILL_MAINTENANCE"
+            result["next_action"] = "REVIEW_SKILL_WITHOUT_RUNNING_APPLICATION_PIPELINE"
+            return result
+
         # Case 1-0: 노션 페이지 URL이 직접 인입된 경우 (Notion Draft Audit-First)
         notion_match = cls.NOTION_URL_PATTERN.search(text)
         if notion_match:
             notion_url = notion_match.group(0)
-            result["detected_case"] = "CASE_NOTION_DRAFT_URL"
+            result["detected_case"] = "CASE_NOTION_PAGE_URL"
             result["url"] = notion_url
-            result["is_draft"] = True
-            for comp in cls.KNOWN_COMPANIES:
+            result["is_draft"] = False  # 페이지 본문을 읽기 전 초안/컨설팅 자료로 단정하지 않는다.
+            for comp in sorted(cls.KNOWN_COMPANIES, key=len, reverse=True):
                 if comp in text:
                     result["company"] = comp
                     break
-            result["next_action"] = "READ_NOTION_PAGE_AND_AUDIT_FIRST"
+            if mode == "LOCAL":
+                result["next_action"] = "LOCAL_NEEDS_PAGE_EXPORT"
+                result["needs_user_question"] = True
+                result["question_prompt"] = "로컬 전용 모드에서는 Notion을 읽지 않습니다. 로컬로 제공된 내용을 사용하십시오."
+            else:
+                result["next_action"] = "READ_NOTION_PAGE_AND_CLASSIFY"
             return result
 
-        # Case 1: 일반 채용 공고 URL이 포함되어 있는 경우
+        # URL은 공고·가이드·초안 어느 것도 될 수 있으므로 읽고 분류한다.
         url_match = cls.URL_PATTERN.search(text)
         if url_match:
             result["detected_case"] = "CASE_1_URL"
             result["url"] = url_match.group(0)
-            result["next_action"] = "PARSE_JOB_POSTING_AND_DEEP_RESEARCH"
+            if is_offline_flag:
+                result["next_action"] = "LOCAL_NEEDS_SOURCE_TEXT"
+                result["needs_user_question"] = True
+                result["question_prompt"] = "오프라인 모드에서는 URL을 열지 않습니다. 제공된 로컬 자료를 사용하고 없는 원문은 미확인으로 남기십시오."
+            else:
+                result["next_action"] = "READ_URL_AND_CLASSIFY"
             return result
 
-        # Case 1-1: 로컬 파일 경로(.pdf, .txt, .md 등)가 직접 인입된 경우 (Audit-First 직행)
+        # 로컬 파일은 경로만으로 초안이라 판정하지 않는다.
         file_match = cls.FILE_PATH_PATTERN.search(text)
         if file_match:
             file_path = file_match.group(1).strip()
-            result["detected_case"] = "CASE_FILE_DRAFT"
+            result["detected_case"] = "CASE_LOCAL_FILE"
             result["file_path"] = file_path
-            result["is_draft"] = True
+            result["is_draft"] = False
 
             # 파일명이나 본문에서 기업명 식별 시도
-            for comp in cls.KNOWN_COMPANIES:
+            for comp in sorted(cls.KNOWN_COMPANIES, key=len, reverse=True):
                 if comp in text:
                     result["company"] = comp
                     break
 
-            # 파일 입력 시 기본 정책: --sync-notion이 명시되지 않으면 Zero Notion 로컬 감사 직행
-            if mode == "NOTION_SYNC":
-                result["next_action"] = "LOOKUP_NOTION_AND_AUDIT_FIRST"
-            else:
+            if mode != "NOTION_SYNC":
                 result["mode"] = "LOCAL"
-                result["next_action"] = "LOCAL_AUDIT_FIRST"
+            result["next_action"] = "READ_LOCAL_FILE_AND_CLASSIFY"
             return result
 
         # Case 2/3: 자소서 본문 텍스트가 들어온 경우 (문항 구조 패턴 또는 긴 글)
@@ -186,10 +204,10 @@ class SmartIngestionRouter:
         is_long_text = len(text) >= 200
 
         if is_structured_draft or is_long_text:
-            result["is_draft"] = True
+            result["is_draft"] = False  # 문항 머리말·길이는 분류 힌트이지 초안 확정이 아니다.
             # 본문 속에서 기업명 역파싱 시도
             matched_company = None
-            for comp in cls.KNOWN_COMPANIES:
+            for comp in sorted(cls.KNOWN_COMPANIES, key=len, reverse=True):
                 if comp in text:
                     matched_company = comp
                     break
@@ -197,10 +215,7 @@ class SmartIngestionRouter:
             if matched_company:
                 result["detected_case"] = "CASE_2_DRAFT_WITH_COMPANY"
                 result["company"] = matched_company
-                if mode == "LOCAL" or not has_notion_env:
-                    result["next_action"] = "LOCAL_AUDIT_FIRST"
-                else:
-                    result["next_action"] = "LOOKUP_NOTION_AND_AUDIT_FIRST"
+                result["next_action"] = "CLASSIFY_TEXT_AND_CONFIRM_SCOPE"
             else:
                 # 3단계 점진적 리졸버: 초안 상단의 명시적 헤더([지원부서: XX팀])만 검사
                 # (서사 본문 속 협업 팀명인 QA팀, 백엔드팀 등의 오탐/환각 원천 차단)
@@ -209,27 +224,27 @@ class SmartIngestionRouter:
                     candidate_team = header_match.group(1)
                     result["detected_case"] = "CASE_DRAFT_WITH_TEAM_RESOLVER"
                     result["candidate_team"] = candidate_team
-                    result["search_query"] = f"{candidate_team} 채용"
-                    result["next_action"] = "RESOLVE_ORGANIZATION_IDENTITY"
+                    result["search_query"] = None
+                    result["next_action"] = "CLASSIFY_TEXT_AND_CONFIRM_SCOPE"
                     result["needs_identity_resolution"] = True
-                    result["needs_user_question"] = True
+                    result["needs_user_question"] = False
                     result["question_prompt"] = cls.format_confirmation_prompt(candidate_team=candidate_team)
                 else:
                     result["detected_case"] = "CASE_3_DRAFT_WITHOUT_COMPANY"
-                    result["next_action"] = "ASK_TARGET_COMPANY_BEFORE_AUDIT"
-                    result["needs_user_question"] = True
-                    result["question_prompt"] = "초안을 확인했습니다. 어느 기업 및 직무(부서)를 목표로 작성하셨나요? (공고 링크나 기업명을 알려주시면 현업 테크 리드의 부서 엣지케이스 D축까지 날카롭게 채점해 드립니다)"
+                    result["next_action"] = "CLASSIFY_TEXT_AND_CONFIRM_SCOPE"
+                    result["needs_user_question"] = False
+                    result["question_prompt"] = "제공된 내용이 초안·작성 가이드·경험 기록 중 무엇인지와 현재 요청을 먼저 확인하십시오. 지원 대상은 작업에 필요할 때 기존 문맥에서 확인하고 없는 정보만 물으십시오."
             return result
 
         # Case 4: 회사명이나 지시어 호출형 ("다우기술 자소서 봐줘", "키움증권 평가해줘")
-        for comp in cls.KNOWN_COMPANIES:
+        for comp in sorted(cls.KNOWN_COMPANIES, key=len, reverse=True):
             if comp in text:
                 result["detected_case"] = "CASE_4_COMPANY_CALL"
                 result["company"] = comp
-                if mode == "LOCAL" or not has_notion_env:
-                    result["next_action"] = "LOAD_LOCAL_DRAFT"
+                if mode != "NOTION_SYNC" or not has_notion_env:
+                    result["next_action"] = "LOAD_LOCAL_MATERIALS_AND_CONFIRM_SCOPE"
                 else:
-                    result["next_action"] = "LOOKUP_NOTION_AND_LOAD_EXISTING_DRAFT"
+                    result["next_action"] = "READ_NOTION_MATERIALS_AND_CONFIRM_SCOPE"
                 return result
 
         # Case 4-1: 모호한 팀명 단문 호출형 ("이즐IS팀 봐줘", "코어플랫폼팀 평가해줘", "이즐IS팀")
@@ -240,8 +255,12 @@ class SmartIngestionRouter:
                 candidate_team = team_match.group(1)
                 result["detected_case"] = "CASE_TEAM_CALL_RESOLVER"
                 result["candidate_team"] = candidate_team
-                result["search_query"] = f"{candidate_team} 채용"
-                result["next_action"] = "RESOLVE_ORGANIZATION_IDENTITY"
+                if is_offline_flag:
+                    result["search_query"] = None
+                    result["next_action"] = "RESOLVE_IDENTITY_FROM_LOCAL_CONTEXT"
+                else:
+                    result["search_query"] = f"{candidate_team} 채용"
+                    result["next_action"] = "RESOLVE_ORGANIZATION_IDENTITY"
                 result["needs_identity_resolution"] = True
                 result["needs_user_question"] = True
                 result["question_prompt"] = cls.format_confirmation_prompt(candidate_team=candidate_team)
