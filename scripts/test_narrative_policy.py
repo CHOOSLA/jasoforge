@@ -1,5 +1,5 @@
 """Regression checks for writing freedom and preserved factual/format checks."""
-import contextlib,copy,importlib.util,io,json,subprocess,sys,tempfile,unittest
+import contextlib,copy,importlib.util,io,json,os,subprocess,sys,tempfile,unittest
 from pathlib import Path
 ROOT=Path(__file__).resolve().parent.parent
 def module(name):
@@ -46,24 +46,24 @@ class NarrativePolicyTests(unittest.TestCase):
   self.assertNotIn('FLAG_LAUNDRY_LIST',[r['key'] for r in kept])
  def test_old_external_story_flag_is_not_reactivated(self):
   with tempfile.TemporaryDirectory() as d:
-   p=Path(d)/'judgment.json';p.write_text(json.dumps({'knockout_flags':{'FLAG_LAUNDRY_LIST':{'sustained':True}}}))
+   p=Path(d)/'judgment.json';p.write_text(json.dumps({'knockout_flags':{'FLAG_LAUNDRY_LIST':{'sustained':True}}}), encoding='utf-8')
    kept,_=grade.audit_knockout_gatekeeper({}, {},TEXT,str(p))
    self.assertNotIn('FLAG_LAUNDRY_LIST',[r['key'] for r in kept])
  def test_packet_generation_and_hash_lock(self):
   with tempfile.TemporaryDirectory() as d:
    base=Path(d);draft=base/'draft.txt';spec=base/'spec.json';packets=base/'packets'
-   draft.write_text('===1===\n'+TEXT)
-   spec.write_text(json.dumps({'questions':{'1':{'min':1,'max':2000,'prompt':'문제 해결 경험을 설명하십시오.','applicable_axes':list('ABCDEFHI'),'axis_applicability_reasons':{a:'테스트용 평가 범위' for a in 'ABCDEFHI'}}},'proper_nouns':['서비스']}))
-   run=subprocess.run([sys.executable,str(ROOT/'scripts/run_pipeline.py'),str(draft),str(spec),'--out-packets-dir',str(packets)],capture_output=True,text=True)
+   draft.write_text('===1===\n'+TEXT, encoding='utf-8')
+   spec.write_text(json.dumps({'questions':{'1':{'min':1,'max':2000,'prompt':'문제 해결 경험을 설명하십시오.','applicable_axes':list('ABCDEFHI'),'axis_applicability_reasons':{a:'테스트용 평가 범위' for a in 'ABCDEFHI'}}},'proper_nouns':['서비스']}), encoding='utf-8')
+   run=subprocess.run([sys.executable,str(ROOT/'scripts/run_pipeline.py'),str(draft),str(spec),'--out-packets-dir',str(packets)],capture_output=True,text=True, encoding='utf-8', env={**os.environ, 'PYTHONIOENCODING': 'utf-8'})
    self.assertEqual(run.returncode,0,run.stdout+run.stderr)
-   hr=(packets/'hr_prompt_packet.txt').read_text();tech=(packets/'tech_prompt_packet.txt').read_text()
+   hr=(packets/'hr_prompt_packet.txt').read_text(encoding='utf-8');tech=(packets/'tech_prompt_packet.txt').read_text(encoding='utf-8')
    self.assertIn(TEXT,hr);self.assertIn(TEXT,tech)
    self.assertNotIn('"type_declaration":',tech)
    self.assertNotIn('Typed Locked Rubric',tech)
-   for name in ['hr_eval.json','tech_eval.json']:(packets/name).write_text('{}')
+   for name in ['hr_eval.json','tech_eval.json']:(packets/name).write_text('{}', encoding='utf-8')
    with contextlib.redirect_stdout(io.StringIO()):
     verify_manifest(packets/'session_token.json',draft,spec,None,ROOT)
-    draft.write_text('===1===\n수정된 본문')
+    draft.write_text('===1===\n수정된 본문', encoding='utf-8')
     with self.assertRaises(ContractError):
      verify_manifest(packets/'session_token.json',draft,spec,None,ROOT)
 

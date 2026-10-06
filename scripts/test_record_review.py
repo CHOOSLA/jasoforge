@@ -19,7 +19,7 @@ class RecordReviewTests(unittest.TestCase):
             role: {'call_id': 'synthetic-fixture-' + role, 'model': 'synthetic-no-model',
                    'started_at': '2026-10-03T00:00:00Z', 'inherited_context': False,
                    'packet_sha256': f.token['inputs'][role.lower() + '_packet']['sha256']}
-            for role in ('HR', 'TECH')}}))
+            for role in ('HR', 'TECH')}}), encoding='utf-8')
 
     def record(self, key='synthetic-test', version='v1'):
         f = self.fixture
@@ -43,22 +43,22 @@ class RecordReviewTests(unittest.TestCase):
 
     def test_a_new_run_is_appended_without_replacing_history(self):
         self.assertEqual(self.record().returncode, 0)
-        before = json.loads(self.ledger.read_text())['runs'][0]
+        before = json.loads(self.ledger.read_text(encoding='utf-8'))['runs'][0]
         f = self.fixture
         f.packets = f.base / 'second_packets'
         self.assertEqual(f.generate().returncode, 0)
-        f.token = json.loads((f.packets / 'session_token.json').read_text())
+        f.token = json.loads((f.packets / 'session_token.json').read_text(encoding='utf-8'))
         f.hr, f.tech = f.review('HR'), f.review('TECH')
         self.assertEqual(f.grade().returncode, 0)
-        log = json.loads(self.execution.read_text())
+        log = json.loads(self.execution.read_text(encoding='utf-8'))
         log['run_id'] = f.token['run_id']
         for role, call in log['evaluators'].items():
             call['call_id'] += '-second'
             call['packet_sha256'] = f.token['inputs'][role.lower() + '_packet']['sha256']
-        self.execution.write_text(json.dumps(log))
+        self.execution.write_text(json.dumps(log), encoding='utf-8')
         run = self.record()
         self.assertEqual(run.returncode, 0, run.stderr)
-        runs = json.loads(self.ledger.read_text())['runs']
+        runs = json.loads(self.ledger.read_text(encoding='utf-8'))['runs']
         self.assertEqual(len(runs), 2)
         self.assertEqual(runs[0], before)
         self.assertNotEqual(runs[0]['run_id'], runs[1]['run_id'])
@@ -71,24 +71,24 @@ class RecordReviewTests(unittest.TestCase):
             self.assertEqual(self.ledger.read_bytes(), before)
 
     def test_legacy_schema_is_not_overwritten(self):
-        self.ledger.write_text('[{"score": 95}]')
+        self.ledger.write_text('[{"score": 95}]', encoding='utf-8')
         before = self.ledger.read_bytes()
         self.assertEqual(self.record().returncode, 2)
         self.assertEqual(self.ledger.read_bytes(), before)
 
     def test_changed_input_cannot_be_recorded(self):
-        self.fixture.draft.write_text('===1===\n바뀐 원고입니다.')
+        self.fixture.draft.write_text('===1===\n바뀐 원고입니다.', encoding='utf-8')
         self.assertEqual(self.record().returncode, 2)
         self.assertFalse(self.ledger.exists())
 
     def test_context_application_mismatch_is_rejected(self):
         f = self.fixture
-        context = json.loads(f.context.read_text())
+        context = json.loads(f.context.read_text(encoding='utf-8'))
         context['application_key'] = 'another-application'
-        f.context.write_text(json.dumps(context))
+        f.context.write_text(json.dumps(context), encoding='utf-8')
         f.packets = f.base / 'context_packets'
         self.assertEqual(f.generate().returncode, 0)
-        f.token = json.loads((f.packets / 'session_token.json').read_text())
+        f.token = json.loads((f.packets / 'session_token.json').read_text(encoding='utf-8'))
         f.hr, f.tech = f.review('HR'), f.review('TECH')
         self.assertEqual(f.grade().returncode, 0)
         run = self.record()
@@ -99,14 +99,14 @@ class RecordReviewTests(unittest.TestCase):
     def test_invalid_quote_cannot_be_recorded(self):
         f = self.fixture
         f.hr['questions']['1']['axis_evidence']['A']['quotes'] = ['원고에 없는 인용']
-        (f.base / 'hr.json').write_text(json.dumps(f.hr))
+        (f.base / 'hr.json').write_text(json.dumps(f.hr), encoding='utf-8')
         self.assertEqual(self.record().returncode, 2)
         self.assertFalse(self.ledger.exists())
 
     def test_same_evaluator_call_is_rejected(self):
-        log = json.loads(self.execution.read_text())
+        log = json.loads(self.execution.read_text(encoding='utf-8'))
         log['evaluators']['TECH']['call_id'] = log['evaluators']['HR']['call_id']
-        self.execution.write_text(json.dumps(log))
+        self.execution.write_text(json.dumps(log), encoding='utf-8')
         self.assertEqual(self.record().returncode, 2)
         self.assertFalse(self.ledger.exists())
 
@@ -114,7 +114,7 @@ class RecordReviewTests(unittest.TestCase):
         self.assertEqual(self.record().returncode, 0)
         before = self.ledger.read_bytes()
         lock = self.ledger.with_name('ledger.json.lock')
-        lock.write_text('other writer')
+        lock.write_text('other writer', encoding='utf-8')
         self.assertEqual(self.record().returncode, 2)
         self.assertEqual(self.ledger.read_bytes(), before)
         self.assertTrue(lock.exists())

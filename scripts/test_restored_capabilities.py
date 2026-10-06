@@ -25,12 +25,12 @@ class RestoredCapabilitiesTests(unittest.TestCase):
         f = self.f
         for n, track in enumerate(['CONVERTIBLE_INTERN', 'NEW_GRAD', 'EXPERIENCED', '신입', '미공개']):
             with self.subTest(track=track):
-                f.context.write_text(json.dumps({'recruitment_track_type': track}))
+                f.context.write_text(json.dumps({'recruitment_track_type': track}), encoding='utf-8')
                 f.packets = f.base / ('track-' + str(n))
                 self.assertEqual(f.generate().returncode, 0)
                 directive = seniority_directive({'recruitment_track_type': track})
                 for role in ('hr', 'tech'):
-                    self.assertIn(directive, (f.packets / (role + '_prompt_packet.txt')).read_text())
+                    self.assertIn(directive, (f.packets / (role + '_prompt_packet.txt')).read_text(encoding='utf-8'))
         self.assertEqual(seniority_directive({'recruitment_track_type': '신입'}), seniority_directive({'recruitment_track_type': 'NEW_GRAD'}))
         self.assertNotEqual(seniority_directive({'recruitment_track_type': '미공개'}), seniority_directive({'recruitment_track_type': 'EXPERIENCED'}))
 
@@ -40,7 +40,7 @@ class RestoredCapabilitiesTests(unittest.TestCase):
         output = f.base / 'summary.json'
         run = f.grade(None, None, '--out-json', output)
         self.assertEqual(run.returncode, 0, run.stdout)
-        data = json.loads(output.read_text())
+        data = json.loads(output.read_text(encoding='utf-8'))
         self.assertEqual(data['questions']['1']['interview'], q)
         self.assertIn(q['questions'][0]['question'], run.stdout)
         self.assertIn(q['questions'][0]['answer_scope'], run.stdout)
@@ -84,7 +84,7 @@ class RestoredCapabilitiesTests(unittest.TestCase):
         f = self.f
         f.packets = f.base / 'profile'
         self.assertEqual(f.generate('--weight-profile', 'HR_PUBLIC_DRIVEN').returncode, 0)
-        f.token = json.loads((f.packets / 'session_token.json').read_text())
+        f.token = json.loads((f.packets / 'session_token.json').read_text(encoding='utf-8'))
         self.assertEqual(f.token['review_weights'], {'HR': .6, 'TECH': .4})
         f.hr, f.tech = f.review('HR'), f.review('TECH')
         self.assertEqual(f.grade(None, None, '--weight-profile', 'HR_PUBLIC_DRIVEN').returncode, 0)
@@ -94,7 +94,7 @@ class RestoredCapabilitiesTests(unittest.TestCase):
     def test_expired_age_is_information_only_with_unchanged_inputs(self):
         f = self.f
         f.token['created_at'] = '2000-01-01T00:00:00+00:00'
-        (f.packets / 'session_token.json').write_text(json.dumps(f.token))
+        (f.packets / 'session_token.json').write_text(json.dumps(f.token), encoding='utf-8')
         run = f.grade()
         self.assertEqual(run.returncode, 0)
         self.assertIn('시간 경과', run.stdout)
@@ -103,10 +103,10 @@ class RestoredCapabilitiesTests(unittest.TestCase):
 
     def test_organization_guide_does_not_invent_relationship_evidence(self):
         f = self.f
-        f.context.write_text(json.dumps({'organization_contract': {'parent_legal_entity': '가상 법인', 'client_service_domain': '가상 서비스'}}))
+        f.context.write_text(json.dumps({'organization_contract': {'parent_legal_entity': '가상 법인', 'client_service_domain': '가상 서비스'}}), encoding='utf-8')
         f.packets = f.base / 'organization'
         self.assertEqual(f.generate().returncode, 0)
-        f.token = json.loads((f.packets / 'session_token.json').read_text())
+        f.token = json.loads((f.packets / 'session_token.json').read_text(encoding='utf-8'))
         f.hr, f.tech = f.review('HR'), f.review('TECH')
         run = f.grade()
         self.assertEqual(run.returncode, 0)
@@ -120,7 +120,7 @@ class RestoredCapabilitiesTests(unittest.TestCase):
         f.tech['questions']['1']['interview'] = self.interview()
         f.tech['questions']['1']['interview']['questions'][0]['anchor_quote'] = '없는 인용'
         self.assertEqual(f.grade(None, None, '--out-json', output).returncode, 2)
-        data = json.loads(output.read_text())
+        data = json.loads(output.read_text(encoding='utf-8'))
         self.assertEqual(data['state'], 'NOT_EVALUABLE')
         self.assertNotIn('mean_weighted_index', data)
 

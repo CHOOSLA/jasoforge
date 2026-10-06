@@ -4,6 +4,7 @@ import argparse
 import hashlib
 import json
 import math
+import os
 import subprocess
 import sys
 import tempfile
@@ -39,7 +40,7 @@ def compute_file_hash(path):
 
 
 def run_cmd(command):
-    run = subprocess.run(command, capture_output=True, text=True)
+    run = subprocess.run(command, capture_output=True, text=True, encoding='utf-8', env={**os.environ, 'PYTHONIOENCODING': 'utf-8'})
     return run.returncode, run.stdout, run.stderr
 
 

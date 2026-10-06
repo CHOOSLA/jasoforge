@@ -4,6 +4,7 @@ Fixtures are synthetic contract tests. They are not independent essay evaluation
 """
 import copy
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -32,19 +33,19 @@ class EvaluationIntegrityTests(unittest.TestCase):
         self.spec_path = self.base / "spec.json"
         self.context = self.base / "context.json"
         self.packets = self.base / "packets"
-        self.draft.write_text("===1===\n" + BODY)
+        self.draft.write_text("===1===\n" + BODY, encoding='utf-8')
         self.spec = {"questions": {"1": {"prompt": "문제 해결 경험을 설명하십시오.", "max": 1000,
             "applicable_axes": list("ABCEF H".replace(" ", "")),
             "axis_applicability_reasons": {a: ("문제 해결 경험 설명의 근거 검토" if a not in "DI" else "직무 적용·가치관을 요구하지 않음") for a in ALL_AXES}}}}
-        self.spec_path.write_text(json.dumps(self.spec, ensure_ascii=False))
-        self.context.write_text("{}")
+        self.spec_path.write_text(json.dumps(self.spec, ensure_ascii=False), encoding='utf-8')
+        self.context.write_text("{}", encoding='utf-8')
         run = self.generate()
         self.assertEqual(run.returncode, 0, run.stdout + run.stderr)
-        self.token = json.loads((self.packets / "session_token.json").read_text())
+        self.token = json.loads((self.packets / "session_token.json").read_text(encoding='utf-8'))
         self.hr, self.tech = self.review("HR"), self.review("TECH")
 
     def command(self, script, *args):
-        return subprocess.run([sys.executable, str(self.root / "scripts" / script), *map(str,args)], capture_output=True, text=True)
+        return subprocess.run([sys.executable, str(self.root / "scripts" / script), *map(str,args)], capture_output=True, text=True, encoding='utf-8', env={**os.environ, 'PYTHONIOENCODING': 'utf-8'})
 
     def generate(self, *extra):
         return self.command("run_pipeline.py",self.draft,self.spec_path,"--context",self.context,"--out-packets-dir",self.packets,*extra)
@@ -65,8 +66,8 @@ class EvaluationIntegrityTests(unittest.TestCase):
 
     def grade(self, hr=None, tech=None, *extra):
         hr_path, tech_path = self.base / "hr.json", self.base / "tech.json"
-        hr_path.write_text(json.dumps(hr if hr is not None else self.hr, ensure_ascii=False))
-        tech_path.write_text(json.dumps(tech if tech is not None else self.tech, ensure_ascii=False))
+        hr_path.write_text(json.dumps(hr if hr is not None else self.hr, ensure_ascii=False), encoding='utf-8')
+        tech_path.write_text(json.dumps(tech if tech is not None else self.tech, ensure_ascii=False), encoding='utf-8')
         return self.command("run_pipeline.py",self.draft,self.spec_path,"--context",self.context,"--hr-eval",hr_path,"--tech-eval",tech_path,"--session-token",self.packets / "session_token.json",*extra)
 
     def assert_invalid(self, run):
@@ -89,7 +90,7 @@ class EvaluationIntegrityTests(unittest.TestCase):
         output=self.base / "new-user.json"
         run=self.grade(None,None,"--out-json",output)
         self.assertEqual(run.returncode,0,run.stdout)
-        data=json.loads(output.read_text())
+        data=json.loads(output.read_text(encoding='utf-8'))
         self.assertEqual(data["mean_weighted_index"],100)
         self.assertEqual(data["questions"]["1"]["fact_review"]["coverage"],"NOT_PROVIDED")
         self.assertEqual(data["questions"]["1"]["compliance"]["status"],"UNVERIFIED")
@@ -179,8 +180,8 @@ def racing_run(command):
 p.run_cmd=racing_run
 sys.argv=['run_pipeline.py',sys.argv[2],sys.argv[3],'--context',sys.argv[4],'--out-packets-dir',sys.argv[5]]
 sys.exit(p.main())
-''')
-        run=subprocess.run([sys.executable,str(probe),str(self.root / "scripts"),str(self.draft),str(self.spec_path),str(self.context),str(packets)],capture_output=True,text=True)
+''', encoding='utf-8')
+        run=subprocess.run([sys.executable,str(probe),str(self.root / "scripts"),str(self.draft),str(self.spec_path),str(self.context),str(packets)],capture_output=True,text=True, encoding='utf-8', env={**os.environ, 'PYTHONIOENCODING': 'utf-8'})
         self.assert_invalid(run)
         self.assertFalse((packets / "session_token.json").exists())
 
@@ -189,9 +190,9 @@ sys.exit(p.main())
         self.assertEqual(run.returncode,0,run.stdout)
         self.assertNotIn("80%",run.stdout)
         self.spec["questions"]["1"]["min"]=100
-        self.spec_path.write_text(json.dumps(self.spec))
+        self.spec_path.write_text(json.dumps(self.spec), encoding='utf-8')
         self.assertNotEqual(self.command("lint.py",self.draft,self.spec_path).returncode,0)
-        self.draft.write_text("===wrong===\n글")
+        self.draft.write_text("===wrong===\n글", encoding='utf-8')
         self.assertNotEqual(self.command("lint.py",self.draft,self.spec_path).returncode,0)
 
     def test_invalid_scope_metadata_is_controlled_error(self):

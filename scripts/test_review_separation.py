@@ -14,18 +14,18 @@ class ReviewSeparationTests(unittest.TestCase):
 
     def refresh(self, context=None):
         f=self.f;self.n+=1
-        if context is not None:f.context.write_text(json.dumps(context,ensure_ascii=False))
-        f.spec_path.write_text(json.dumps(f.spec,ensure_ascii=False))
+        if context is not None:f.context.write_text(json.dumps(context,ensure_ascii=False), encoding='utf-8')
+        f.spec_path.write_text(json.dumps(f.spec,ensure_ascii=False), encoding='utf-8')
         f.packets=f.base/f'packets-{self.n}'
         run=f.generate();self.assertEqual(run.returncode,0,run.stdout+run.stderr)
-        f.token=json.loads((f.packets/'session_token.json').read_text())
+        f.token=json.loads((f.packets/'session_token.json').read_text(encoding='utf-8'))
         f.hr,f.tech=f.review('HR'),f.review('TECH')
 
     def result(self):
         out=self.f.base/'aggregate.json'
         run=self.f.grade(None,None,'--out-json',out)
         self.assertEqual(run.returncode,0,run.stdout+run.stderr)
-        return json.loads(out.read_text()),run.stdout
+        return json.loads(out.read_text(encoding='utf-8')),run.stdout
 
     def evidence(self,kind='record',availability='provided'):
         data={'fact_check':{'sources':[],'claims':{'1':[{'id':'c1','quote':fixtures.BODY,'availability':availability,'source_ids':[]}]}}}
@@ -129,7 +129,7 @@ class ReviewSeparationTests(unittest.TestCase):
 
     def test_legacy_token_and_scores_are_not_relabelled(self):
         self.f.token['schema_version']=2
-        (self.f.packets/'session_token.json').write_text(json.dumps(self.f.token))
+        (self.f.packets/'session_token.json').write_text(json.dumps(self.f.token), encoding='utf-8')
         self.f.assert_invalid(self.f.grade())
 
     def test_missing_prompt_can_be_deferred_without_blocking_other_feedback(self):
@@ -146,7 +146,7 @@ class ReviewSeparationTests(unittest.TestCase):
 
     def test_legacy_sources_cannot_be_hidden_by_empty_fact_check(self):
         f=self.f
-        f.context.write_text(json.dumps({'experience_sources':[{'text':'존재하는 실제 기록'}],'fact_check':{'sources':[],'claims':{}}}))
+        f.context.write_text(json.dumps({'experience_sources':[{'text':'존재하는 실제 기록'}],'fact_check':{'sources':[],'claims':{}}}), encoding='utf-8')
         f.packets=f.base/'hidden-source'
         self.f.assert_invalid(f.generate())
 
@@ -160,14 +160,14 @@ class ReviewSeparationTests(unittest.TestCase):
         f=self.f;f.context.unlink();f.packets=f.base/'contextless-packets'
         run=f.command('run_pipeline.py',f.draft,f.spec_path,'--out-packets-dir',f.packets)
         self.assertEqual(run.returncode,0,run.stdout+run.stderr)
-        f.token=json.loads((f.packets/'session_token.json').read_text())
+        f.token=json.loads((f.packets/'session_token.json').read_text(encoding='utf-8'))
         hr,tech=f.review('HR'),f.review('TECH')
-        (f.base/'hr.json').write_text(json.dumps(hr));(f.base/'tech.json').write_text(json.dumps(tech))
+        (f.base/'hr.json').write_text(json.dumps(hr), encoding='utf-8');(f.base/'tech.json').write_text(json.dumps(tech), encoding='utf-8')
         log={'run_id':f.token['run_id'],'evaluators':{r:{'call_id':'fixture-'+r,'model':'synthetic','started_at':'2026-10-04','inherited_context':False,'packet_sha256':f.token['inputs'][r.lower()+'_packet']['sha256']} for r in ['HR','TECH']}}
-        (f.base/'execution.json').write_text(json.dumps(log))
+        (f.base/'execution.json').write_text(json.dumps(log), encoding='utf-8')
         run=f.command('record_review.py',f.draft,f.spec_path,'--hr-eval',f.base/'hr.json','--tech-eval',f.base/'tech.json','--session-token',f.packets/'session_token.json','--execution-log',f.base/'execution.json','--application-key','new-user','--version','v1','--ledger',f.base/'no-context-ledger.json')
         self.assertEqual(run.returncode,0,run.stdout+run.stderr)
-        stored=json.loads((f.base/'no-context-ledger.json').read_text())['runs'][0]
+        stored=json.loads((f.base/'no-context-ledger.json').read_text(encoding='utf-8'))['runs'][0]
         self.assertEqual(stored['context'],{})
         self.assertNotIn('context',stored['source_file_hashes'])
 
