@@ -33,7 +33,7 @@ class RecordReviewTests(unittest.TestCase):
         self.assertEqual(run.returncode, 0, run.stderr)
         first = self.ledger.read_bytes()
         stored = json.loads(first)['runs'][0]
-        self.assertEqual(stored['draft_text'], self.fixture.draft.read_text())
+        self.assertEqual(stored['draft_text'], self.fixture.draft.read_bytes().decode('utf-8'))
         self.assertEqual(stored['reviews']['HR'], self.fixture.hr)
         self.assertIn('REVIEW_COMPLETE', stored['aggregate_report'])
         run = self.record()
