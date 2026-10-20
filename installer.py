@@ -21,7 +21,7 @@ import time
 import subprocess
 from pathlib import Path
 
-VERSION = "5.1.0"
+VERSION = "5.1.1"
 SKILL_NAME = "jaso-pipeline"
 
 # ANSI Terminal Colors

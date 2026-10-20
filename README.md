@@ -8,7 +8,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-emerald.svg?style=flat-square)](LICENSE)
 [![Python 3.9+](https://img.shields.io/badge/python-3.9%2B-blue.svg?style=flat-square)](https://www.python.org/)
-[![Version](https://img.shields.io/badge/version-5.1.0-cyan.svg?style=flat-square)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-5.1.1-cyan.svg?style=flat-square)](CHANGELOG.md)
 [![Agent Skill](https://img.shields.io/badge/Agent-Skill-purple.svg?style=flat-square)](SKILL.md)
 
 **경험을 벼리고, 근거로 설득하다.**
