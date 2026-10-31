@@ -21,8 +21,10 @@ import time
 import subprocess
 from pathlib import Path
 
-VERSION = "5.1.1"
+VERSION = "5.2.0"
 SKILL_NAME = "jaso-pipeline"
+# 재설치 때 지우지 않는 사용자 데이터 폴더. 지원서 작업 공간이 기본적으로 여기에 생긴다.
+PRESERVED_USER_DATA = ("scratch",)
 
 # ANSI Terminal Colors
 USE_COLOR = sys.stdout.isatty() and os.environ.get("NO_COLOR") is None
@@ -87,15 +89,26 @@ def install_target(source_dir: Path, target_path: Path, use_symlink: bool = Fals
     # Ensure parent directory exists
     target_path.parent.mkdir(parents=True, exist_ok=True)
 
-    # Clean existing target
-    if target_path.is_symlink() or target_path.exists():
-        if target_path.is_symlink() or target_path.is_file():
-            target_path.unlink()
-        elif target_path.is_dir():
-            shutil.rmtree(target_path)
+    # 설치 폴더 안의 사용자 작업 기록(scratch 등)은 코드 교체와 분리해 보존한다.
+    keeps_user_data = (target_path.is_dir() and not target_path.is_symlink()
+                       and any((target_path / name).exists() for name in PRESERVED_USER_DATA))
 
-    if use_symlink:
+    # Clean existing target
+    if target_path.is_symlink() or target_path.is_file():
+        target_path.unlink()
+    elif target_path.is_dir():
+        for child in target_path.iterdir():
+            if child.name in PRESERVED_USER_DATA:
+                continue
+            if child.is_dir() and not child.is_symlink():
+                shutil.rmtree(child)
+            else:
+                child.unlink()
+
+    if use_symlink and not keeps_user_data:
         try:
+            if target_path.exists():
+                target_path.rmdir()
             target_path.symlink_to(source_dir.resolve(), target_is_directory=True)
             return "symlinked"
         except Exception:
@@ -105,9 +118,10 @@ def install_target(source_dir: Path, target_path: Path, use_symlink: bool = Fals
     shutil.copytree(
         source_dir,
         target_path,
-        ignore=shutil.ignore_patterns("__pycache__", "*.pyc", ".git*", ".DS_Store", "scratch", "dist")
+        ignore=shutil.ignore_patterns("__pycache__", "*.pyc", ".git*", ".DS_Store", "scratch", "dist"),
+        dirs_exist_ok=True,
     )
-    return "copied"
+    return "copied (user data kept)" if keeps_user_data else "copied"
 
 def run_self_test(target_path: Path) -> bool:
     lint_script = target_path / "scripts" / "lint.py"
@@ -219,6 +233,7 @@ def main():
         if status == "source":
             skipped_source_count += 1
         else:
+            print(f"  {DIM}{name}: {status}{RESET}")
             if not args.dry_run:
                 run_self_test(path)
             success_count += 1

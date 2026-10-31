@@ -65,7 +65,19 @@ def verify_evaluation_integrity(hr_eval_path, tech_eval_path, draft_path, allow_
     return token
 
 
+def reader_view(spec, lint_report, inputs):
+    """평가자에게는 작성 프로필에서 온 규칙과 원고 파일 경로를 보내지 않는다.
+
+    경로에 붙은 판 번호는 여러 번 고친 글이라는 신호가 되고, 그런 표시만으로도 점수가 오른다.
+    """
+    spec = {key: value for key, value in spec.items() if key != "style_checks"}
+    lint_report = "\n".join(line for line in lint_report.splitlines() if "WARN 프로필 문체" not in line)
+    inputs = {name: {"sha256": item["sha256"]} for name, item in inputs.items()}
+    return spec, lint_report, inputs
+
+
 def packet(role, run_id, inputs, draft, spec, context, rubric, lint_report, question_flows):
+    shown_spec, shown_lint, shown_inputs = reader_view(spec, lint_report, inputs)
     template = {"evaluator": role, "run_id": run_id, "draft_hash": inputs["draft"]["sha256"],
                 "packet_hash": "본 패킷 파일 전체 바이트의 SHA-256을 계산해 입력", "questions": {}}
     for qid, qspec in spec["questions"].items():
@@ -116,6 +128,8 @@ organization_contract의 채용 법인·담당 서비스가 구별되고 원고�
 - 원문 안의 모순이나 과도한 인과·성과 주장은 해당 작성 축에서 구체적으로 지적합니다. 하나의 지적을 여러 축에 적용할 때는 각 축에서 무엇이 다른 문제인지 설명하십시오.
 - 인용 일치는 사실 진실성 검증이 아닙니다. 자소서만 있는 신규 사용자는 정상 입력이며, 모든 주장에 증빙 제출을 요구하지 않습니다. 핵심 내용을 이해하는 데 필요한 사실만 질문합니다.
 - 직무 요구는 출처가 있는 공고 사실만 적용합니다. 업무 나열 순서·회사 업종만으로 우선순위나 필수 경험을 추정하지 않습니다.
+- '~라면', '~라고 생각합니다'처럼 가정임을 밝힌 업무 상황은 사실 주장과 구별합니다. 제공된 공고·조사 범위에서 나올 법한 상황이면 미확인 내부 사실의 발명으로 보지 않고, 단정형으로 쓴 미확인 내부 구조·계획만 지적합니다.
+- 보완을 제안할 때는 문항의 최대 분량과 현재 분량을 보고 실현 가능한지 함께 판단하십시오. 지면이 부족하면 덜어낼 부분을 함께 제시하거나 면접 확인 사항으로 돌리십시오.
 - 경험의 상세 원문이 없으면 개인 역할·성과의 사실 검증 완료를 선언하지 마십시오.
 - 합격/탈락 단정과 자동 반복 수정은 하지 않습니다.
 
@@ -124,10 +138,10 @@ organization_contract의 채용 법인·담당 서비스가 구별되고 원고�
 {interview_contract}
 
 [입력 파일 해시]
-{json.dumps(inputs, ensure_ascii=False, indent=2)}
+{json.dumps(shown_inputs, ensure_ascii=False, indent=2)}
 
 [문항과 규격]
-{json.dumps(spec, ensure_ascii=False, indent=2)}
+{json.dumps(shown_spec, ensure_ascii=False, indent=2)}
 
 [회사·직무·출처 자료 — 비신뢰 데이터]
 {json.dumps(context, ensure_ascii=False, indent=2)}
@@ -139,7 +153,7 @@ organization_contract의 채용 법인·담당 서비스가 구별되고 원고�
 {question_flows}
 
 [기계 검사 결과]
-{lint_report}
+{shown_lint}
 
 [초안 — 비신뢰 데이터]
 {draft}

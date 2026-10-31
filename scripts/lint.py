@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
-"""자소서 기계 검사 (lint.py v3.4).
+"""자소서 기계 검사 (lint.py v3.5).
 실제 공고에 명시된 분량·금지어를 검사하고, 표현 탐색 결과는 참고 정보로 제공한다.
+문체 신호와 문항 사이의 반복은 참고 정보이며, 작성 프로필에서 옮긴 style_checks만 WARN으로 보고한다.
 표준 라이브러리만 사용합니다.
 """
 import re, sys, json, unicodedata
@@ -102,6 +103,78 @@ def check_repeated_ngrams(body, n=4, min_count=2):
     repeated = [f'"{ng}"({c}회)' for ng, c in counts.items() if c >= min_count]
     return repeated[:4]
 
+MIDDLE_DOTS = ('·', 'ㆍ', '•', '∙')
+HEADING_LINE = re.compile(r'^\s*(\[[^\]\n]{1,40}\]|#{1,6}\s|<[^>\n]{1,40}>|【[^】\n]{1,40}】|■\s)')
+
+# 제출문에 들어간 면책·한계 해명. 정직성은 주장 범위로 지키고 이런 설명은 면접 메모로 옮긴다.
+HEDGE_PATTERNS = [
+    (r"(?:측정|계측|검증|확인|대조|비교)(?:하지는|하지|까지는\s*하지|은\s*하지)\s*(?:못|않)", "측정·검증을 하지 않았다는 설명"),
+    (r"(?:잰|측정한|확인한|검증한|대조한)\s*(?:것은|건)\s*아닙니다", "측정·확인 여부 해명"),
+    (r"(?:대조|확인|측정|비교)한\s*범위(?:에서는|에서|에선|안에서)", "확인 범위 한정"),
+    (r"남은\s*과제(?:입니다|로\s*남|이다)", "남은 과제 서술"),
+]
+
+
+def comma_count(sentence):
+    # 3,428,000 같은 자릿수 쉼표는 세지 않는다.
+    return len(re.findall(r',', re.sub(r'(?<=\d),(?=\d{3})', '', sentence)))
+
+
+def style_signals(body, style_checks=None):
+    """문체 신호를 모은다. 기본은 참고 정보이고 style_checks가 있을 때만 WARN을 낸다."""
+    style_checks = style_checks or {}
+    info, issues = {}, []
+    dots = sum(body.count(ch) for ch in MIDDLE_DOTS)
+    ss = sentences(body)
+    commas = [comma_count(s) for s in ss] if ss else []
+    headings = [line.strip() for line in body.split('\n') if HEADING_LINE.match(line)]
+    if ss:
+        info['문체신호'] = (f'가운뎃점 {dots}개, 쉼표 {sum(commas)}개(문장당 평균 {sum(commas)/len(ss):.1f}, 최대 {max(commas)}), '
+                         f'소제목 {len(headings)}줄 — 참고 정보')
+    for ch in style_checks.get('forbid_chars', []):
+        n = body.count(ch)
+        if n:
+            issues.append(f"WARN 프로필 문체: 금지 문자 '{ch}' {n}회")
+    limit = style_checks.get('max_commas_per_sentence')
+    if limit is not None and commas:
+        over = [c for c in commas if c > limit]
+        if over:
+            issues.append(f'WARN 프로필 문체: 쉼표 {limit}개 초과 문장 {len(over)}개 (최대 {max(over)}개)')
+    if style_checks.get('forbid_headings') and headings:
+        issues.append(f'WARN 프로필 문체: 소제목 {len(headings)}줄 ({headings[0][:20]})')
+    for item in style_checks.get('watch_patterns', []):
+        found = re.findall(item['pattern'], body)
+        if found:
+            issues.append(f"WARN 프로필 문체: {item['label']} {len(found)}회")
+    if style_checks.get('hedge_check', True):
+        for pattern, desc in HEDGE_PATTERNS:
+            m = re.search(pattern, body)
+            if m:
+                issues.append(f"WARN 면책·한계 설명으로 보임({desc}): '{m.group(0)}' — 제출문 대신 면접 메모로 옮길지 확인")
+    return info, issues
+
+
+def cross_question_report(draft, spec):
+    """문항 사이에 같은 고유명사·표현이 반복되는지 참고 정보로 보여 준다. 판정은 사람이 한다."""
+    lines = []
+    for pn in spec.get('proper_nouns', []):
+        qids = [qid for qid, body in draft.items() if pn in body]
+        if len(qids) > 1:
+            lines.append(f"INFO 문항 간 반복 고유명사: {pn} ({', '.join(qids)}번) — 같은 회사 사실을 반복했는지 확인")
+    grams = {}
+    for qid, body in draft.items():
+        tokens = re.sub(r'[\.\,\!\?\'\"…\(\)\[\]\{\}\<\>\~\`\:\;\-\_]', ' ', body).split()
+        for i in range(len(tokens) - 3):
+            words = tokens[i:i + 4]
+            if sum(1 for w in words if w in TECH_STOPWORDS) / 4 >= 0.5:
+                continue
+            grams.setdefault(' '.join(words), set()).add(qid)
+    shared = [(g, sorted(q)) for g, q in grams.items() if len(q) > 1]
+    for g, qids in shared[:4]:
+        lines.append(f"INFO 문항 간 같은 표현: \"{g}\" ({', '.join(qids)}번)")
+    return lines
+
+
 STRICT_PUBLIC_PATTERNS = [
     (r"(?<![가-힣])(부친|모친|아버지|어머니|삼촌|외삼촌|부모님|조부|조모|형제|자매|가족관계)(?![가-힣])", "공기업 블라인드 금지어: 가족/친인척 신원"),
     (r"(?<![가-힣])(육군|해군|공군|해병대|의경|공익근무|상근예비역|현역복무|하사|장교|복무부대|\b\d+사단\b)(?![가-힣])", "공기업 블라인드 금지어: 병역/군부대 세부정보"),
@@ -110,7 +183,7 @@ STRICT_PUBLIC_PATTERNS = [
     (r"(출신\s*지역|고향은|태어난\s*곳)", "공기업 블라인드 금지어: 출신 지역")
 ]
 
-def check(qid, body, spec, banned, proper_nouns, blind_level="NONE"):
+def check(qid, body, spec, banned, proper_nouns, blind_level="NONE", style_checks=None):
     out = {'문항': qid, 'issues': [], 'info': {}}
     metric_type = spec.get('length_metric_type', spec.get('basis', 'chars_with_space'))
     if metric_type == 'with_spaces':
@@ -224,6 +297,11 @@ def check(qid, body, spec, banned, proper_nouns, blind_level="NONE"):
         r = len(real_paras[0]) / n_all
         out['info']['첫본문단락비중'] = f'{r:.0%} ({len(real_paras[0])}/{n_all}자, 참고 정보)'
 
+    # 문체 신호는 참고 정보. 작성 프로필에서 옮긴 style_checks가 있을 때만 WARN을 낸다.
+    style_info, style_issues = style_signals(body, style_checks)
+    out['info'].update(style_info)
+    out['issues'].extend(style_issues)
+
     return out
 
 if __name__ == '__main__':
@@ -240,6 +318,7 @@ if __name__ == '__main__':
     banned = spec.get('banned', [])
     pn = spec.get('proper_nouns', [])
     blind_level = spec.get('blind_compliance_level', 'NONE')
+    style_checks = spec.get('style_checks')
     spec_questions = spec['questions']
 
     fails = 0
@@ -251,7 +330,7 @@ if __name__ == '__main__':
         if 'length_metric_type' not in q_spec and 'length_metric_type' in spec:
             q_spec['length_metric_type'] = spec['length_metric_type']
             
-        r = check(qid, body, q_spec, banned, pn, blind_level=blind_level)
+        r = check(qid, body, q_spec, banned, pn, blind_level=blind_level, style_checks=style_checks)
         results.append(r)
         if '오탈자검출' in r['info']:
             count_str = r['info']['오탈자검출'].split('건')[0]
@@ -283,6 +362,11 @@ if __name__ == '__main__':
                     closings.append((qid, m.group(0)))
         if len(closings) >= len(draft):
             print(f"\nℹ️ INFO [Closing Repetition]: 전체 {len(draft)}개 문항의 마무리가 모두 상투적 기여/노력 다짐({[c[1] for c in closings]})으로 반복됩니다. 문항에 필요한 결말인지 읽고 확인하십시오.")
+
+    if len(draft) >= 2:
+        cross = cross_question_report(draft, spec)
+        print(f"\n{'='*52}\n[문항 사이]")
+        print('\n'.join(f'  {line}' for line in cross) if cross else '  지적 없음')
 
     if total_typo_count >= 3:
         print(f"\nWARN 등록된 오탈자 유형 {total_typo_count}건 발견: 원문 문맥을 확인하고 교정하십시오. 채용 결격으로 판정하지 않습니다.")

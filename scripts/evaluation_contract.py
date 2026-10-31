@@ -70,6 +70,39 @@ def load_draft(path):
     return draft
 
 
+STYLE_CHECK_KEYS = {"forbid_chars", "max_commas_per_sentence", "forbid_headings", "watch_patterns", "hedge_check"}
+
+
+def validate_style_checks(style):
+    """작성 프로필에서 옮긴 문체 규칙. lint가 WARN으로만 보고한다."""
+    if style is None:
+        return
+    if not isinstance(style, dict):
+        raise ContractError("spec.style_checks는 객체여야 합니다.")
+    unknown = set(style) - STYLE_CHECK_KEYS
+    if unknown:
+        raise ContractError(f"spec.style_checks에 알 수 없는 항목: {sorted(unknown)}")
+    chars = style.get("forbid_chars", [])
+    if not isinstance(chars, list) or any(not isinstance(c, str) or not c for c in chars):
+        raise ContractError("style_checks.forbid_chars는 빈 값 없는 문자열 배열이어야 합니다.")
+    limit = style.get("max_commas_per_sentence")
+    if limit is not None and (type(limit) is not int or limit < 0):
+        raise ContractError("style_checks.max_commas_per_sentence는 0 이상 정수여야 합니다.")
+    for key in ("forbid_headings", "hedge_check"):
+        if key in style and not isinstance(style[key], bool):
+            raise ContractError(f"style_checks.{key}는 true/false여야 합니다.")
+    patterns = style.get("watch_patterns", [])
+    if not isinstance(patterns, list):
+        raise ContractError("style_checks.watch_patterns는 배열이어야 합니다.")
+    for item in patterns:
+        if not isinstance(item, dict) or not isinstance(item.get("pattern"), str) or not isinstance(item.get("label"), str) or not item["label"].strip():
+            raise ContractError("style_checks.watch_patterns 항목은 pattern과 label 문자열이 필요합니다.")
+        try:
+            re.compile(item["pattern"])
+        except re.error as exc:
+            raise ContractError(f"유효하지 않은 문체 규칙 정규식: {item['pattern']}") from exc
+
+
 def validate_spec(spec, draft, require_axes=False):
     questions = spec.get("questions")
     if not isinstance(questions, dict) or not questions:
@@ -85,6 +118,7 @@ def validate_spec(spec, draft, require_axes=False):
             re.compile(pattern)
         except re.error as exc:
             raise ContractError(f"유효하지 않은 금지 표현 정규식: {pattern}") from exc
+    validate_style_checks(spec.get("style_checks"))
     for qid, question in questions.items():
         if not isinstance(question, dict):
             raise ContractError(f"문항 {qid} 규격은 객체여야 합니다.")

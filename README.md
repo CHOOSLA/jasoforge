@@ -8,7 +8,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-emerald.svg?style=flat-square)](LICENSE)
 [![Python 3.9+](https://img.shields.io/badge/python-3.9%2B-blue.svg?style=flat-square)](https://www.python.org/)
-[![Version](https://img.shields.io/badge/version-5.1.1-cyan.svg?style=flat-square)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-5.2.0-cyan.svg?style=flat-square)](CHANGELOG.md)
 [![Agent Skill](https://img.shields.io/badge/Agent-Skill-purple.svg?style=flat-square)](SKILL.md)
 
 **경험을 벼리고, 근거로 설득하다.**
@@ -101,6 +101,9 @@ HR와 TECH가 작성 대화를 물려받지 않은 별도 컨텍스트에서 원
 - `--offline`: 네트워크 조회 없이 제공된 자료로 진행합니다.
 - `--sync-notion` / `--notion`: 요청한 작업을 기존 Notion 자료와 연결해 반영합니다.
 - `--quick`: 제공 자료로 빠르게 검토하고, 생략한 조사·평가 범위를 알려줍니다.
+- **작성 프로필**: 반복해서 고친 문체·구조·소재 선호를 개인 프로필에 두면 작성과 기계 검사에 반영합니다. 평가자에게는 넘기지 않아 독립 검토가 유지됩니다. 프로필은 사용자 자료이며 저장소에 올리지 않습니다. 자세한 내용은 [작성 프로필](references/author-profile.md)에 있습니다.
+- **지원서 입력 보조**: 요청하면 브라우저 연동 도구로 지원서 칸을 채우고 입력값을 원고·자료와 대조합니다. 동의와 최종 제출은 사용자가 합니다.
+- **다른 공급사 평가자**: 작성 모델과 다른 공급사 모델 CLI가 있으면 HR과 TECH 평가를 그 모델에서 실행합니다. 같은 계열 평가자가 자기 계열이 쓴 글을 더 좋게 보는 경향을 줄이기 위해서입니다. 현재 내장 공급자는 Codex CLI이며, 사용자 지침과 스킬이 보이지 않는 새 환경에 평가 패킷만 넘깁니다. 쓸 수 없으면 기존처럼 같은 모델의 독립 서브에이전트로 평가합니다. 자세한 내용은 [평가 실행 계약](references/evaluation.md)에 있습니다. 이 기능은 실험 단계이며 실제 지원 작업에서는 아직 검증되지 않았습니다.
 
 작성과 검토에 서로 다른 모델을 사용해 판단 근거를 비교할 수도 있습니다. 새 컨텍스트에서도 같은 모델의 문체 선호가 남을 수 있으며, 모델을 바꾸는 것만으로 객관성이 보장되지는 않습니다.
 
