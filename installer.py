@@ -21,7 +21,7 @@ import time
 import subprocess
 from pathlib import Path
 
-VERSION = "5.2.0"
+VERSION = "5.2.1"
 SKILL_NAME = "jaso-pipeline"
 # 재설치 때 지우지 않는 사용자 데이터 폴더. 지원서 작업 공간이 기본적으로 여기에 생긴다.
 PRESERVED_USER_DATA = ("scratch",)

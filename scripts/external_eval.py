@@ -70,21 +70,38 @@ def link_auth(real, codex_home):
     """로그인 파일을 복사하지 않고 원래 파일을 가리키는 링크로 건다.
 
     Codex는 갱신 토큰을 한 번 쓰면 폐기한다. 복사본이 갱신하면 원래 로그인이 끊기므로
-    갱신이 일어나도 원래 파일에 쓰이게 한다.
+    갱신이 일어나도 원래 파일에 쓰이게 한다. 윈도우는 관리자 권한이나 개발자 모드 없이
+    심볼릭 링크를 만들 수 없어(WinError 1314) 하드링크로 대신하고, 그것도 안 되면
+    복사한 뒤 restore_auth가 바뀐 토큰을 원래 파일에 되돌려 쓴다.
     """
     codex_home.mkdir(parents=True, exist_ok=True)
     link = codex_home / "auth.json"
-    link.symlink_to(real)
-    return link, sha256(real.read_bytes())
+    original = sha256(real.read_bytes())
+    try:
+        link.symlink_to(real)
+    except OSError:
+        try:
+            os.link(real, link)
+        except OSError:
+            shutil.copyfile(real, link)
+    return link, original
 
 
 def restore_auth(link, real, original_hash):
-    """실행 중 링크가 새 파일로 바뀌었으면 새 토큰을 원래 위치로 돌려놓는다."""
+    """실행 중 링크가 새 파일로 바뀌었거나 복사본이 갱신됐으면 새 토큰을 원래 위치로 돌려놓는다."""
     if link.is_symlink():
         return "linked"
     if not link.exists():
         return "missing"
-    if not real.exists() or sha256(real.read_bytes()) != original_hash:
+    current = sha256(link.read_bytes())
+    real_hash = sha256(real.read_bytes()) if real.exists() else None
+    if current == real_hash:
+        # 하드링크로 제자리에서 갱신됐거나 아무것도 바뀌지 않았다
+        return "linked"
+    if current == original_hash:
+        # 평가 쪽은 그대로인데 원래 파일만 바뀌었다(다른 codex 실행이 갱신). 손대지 않는다
+        return "unchanged"
+    if real_hash != original_hash:
         return "conflict"
     staged = real.with_name(real.name + ".jaso-restore")
     shutil.copyfile(link, staged)
@@ -93,17 +110,38 @@ def restore_auth(link, real, original_hash):
     return "restored"
 
 
+def disable_host_skills(codex_home, real_home):
+    """실제 홈의 ~/.agents/skills를 끄는 설정을 격리 CODEX_HOME에 쓴다.
+
+    윈도우 Codex는 HOME과 USERPROFILE을 바꿔도 OS가 알려 주는 진짜 사용자 폴더에서
+    ~/.agents/skills를 찾는다(codex-cli 0.164.0에서 확인). 그대로 두면 작성 쪽 스킬이
+    평가자에게 보이므로 경로마다 enabled = false를 건다. 다른 OS에서는 바뀐 HOME 아래라
+    해당 경로가 비어 있고, 설정이 있어도 해가 없다.
+    """
+    entries = []
+    for skill in sorted((real_home / ".agents" / "skills").glob("*/SKILL.md")):
+        path = json.dumps(skill.as_posix(), ensure_ascii=False)
+        entries.append(f"[[skills.config]]\npath = {path}\nenabled = false\n")
+    if entries:
+        (codex_home / "config.toml").write_text("\n".join(entries), encoding="utf-8")
+    return len(entries)
+
+
 def run_codex(prompt, args, workdir):
     real = codex_auth_path()
     with tempfile.TemporaryDirectory(prefix="jaso-eval-home-") as tmp:
         home = Path(tmp)
         link, original = link_auth(real, home / ".codex")
+        disable_host_skills(home / ".codex", Path.home())
         last = home / "last_message.txt"
         command = [shutil.which("codex"), "exec", "--ephemeral", "--skip-git-repo-check", "-s", "read-only",
                    "-C", str(workdir), "-c", f'model_reasoning_effort="{args.effort}"', "-o", str(last)]
         if args.model:
             command += ["-m", args.model]
         env = {**os.environ, "HOME": str(home), "CODEX_HOME": str(home / ".codex")}
+        if os.name == "nt":
+            # 윈도우의 홈은 HOME이 아니라 USERPROFILE이다. 사용자 지침이 보이지 않게 함께 바꾼다
+            env["USERPROFILE"] = str(home)
         try:
             run = subprocess.run(command + ["-"], input=prompt, env=env, capture_output=True, text=True,
                                  encoding="utf-8", timeout=args.timeout)
